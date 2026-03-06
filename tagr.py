@@ -29,11 +29,11 @@ class PosToken:
 
 
 @dataclass(frozen=True)
-class SubRelation:
-    """Internal model for a subordinate `subject sub object` relation."""
+class Relation:
+    """Internal model for a `subject <relation> object` relation. Generic enough to use in sub relations and predicate relations"""
 
     subject: str
-    sub: str
+    rel: str
     obj: str
 
 
@@ -73,33 +73,38 @@ def pos_tag(text: str) -> list[PosToken]:
     return [PosToken(text=token.text, pos=token.pos_) for token in doc if not token.is_space]
 
 
-def parse_sub_relation(tokens: list[PosToken]) -> SubRelation:
-    """Parse a narrow `subject AUX DET object` pattern into a sub relation."""
+def parse_relation(tokens: list[PosToken]) -> Relation:
+    """Parse a narrow `subject <relation> object` pattern into a sub relation."""
     lexical_tokens = [t for t in tokens if t.pos != "PUNCT"]
 
     if len(lexical_tokens) != 4:
         raise TranslationError("Unsupported input: expected a 4-token sub relation")
 
+    # TODO copula in linguistics usually maps to sub relators, but not always. Use the name `sub_relator` or just `sub` instead. Follow the rules in AGENTS.md! Use `parser.y` names.
     subject, copula, determiner, obj = lexical_tokens
 
     if subject.pos not in {"NOUN", "PROPN", "PRON"}:
         raise TranslationError("Unsupported input: subject must be noun-like")
-
+    
+    # TODO don't hard code natural language - use POS tags or abstract word classes, etc.
     if copula.pos != "AUX" or copula.text.lower() != "is":
         raise TranslationError("Unsupported input: only copula 'is' is supported")
 
+    # TODO don't hard code natural language - use POS tags or abstract word classes, etc.
     if determiner.pos != "DET" or determiner.text.lower() not in {"a", "an"}:
         raise TranslationError("Unsupported input: expected determiner 'a' or 'an'")
 
     if obj.pos not in {"NOUN", "PROPN"}:
         raise TranslationError("Unsupported input: object must be noun-like")
 
-    return SubRelation(subject=subject.text.lower(), sub="_sub", obj=obj.text.lower())
+    # TODO don't hard code tagd hard tags like `_sub`. This sub should contain the TAGLized sub relation containing the input tokens seperated by `_`
+    # For example "is a" => "is_a", "can" => "can", "of" => "of", "part of" => "part_of"
+    return Relation(subject=subject.text.lower(), rel="_sub", obj=obj.text.lower())
 
 
-def rule_sub_relation(relation: SubRelation) -> str:
+def rule_relation(relation: Relation) -> str:
     """Translate a sub relation into a TAGL put statement."""
-    return f">> {relation.subject} {relation.sub} {relation.obj};"
+    return f">> {relation.subject} {relation.rel} {relation.obj};"
 
 
 def translate(text: str, pos_tagger: Callable[[str], list[PosToken]] | None = None) -> str:
@@ -115,8 +120,8 @@ def translate(text: str, pos_tagger: Callable[[str], list[PosToken]] | None = No
     """
     tagger = pos_tagger or pos_tag
     tokens = tagger(text)
-    relation = parse_sub_relation(tokens)
-    return rule_sub_relation(relation)
+    relation = parse_relation(tokens)
+    return rule_relation(relation)
 
 
 def main() -> int:

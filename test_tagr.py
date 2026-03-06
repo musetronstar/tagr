@@ -12,7 +12,7 @@ import io
 import pytest
 
 import tagr
-from tagr import PosToken, SubRelation, TranslationError, normalize, parse_sub_relation, rule_sub_relation, translate
+from tagr import PosToken, Relation, TranslationError, normalize, parse_relation, rule_relation, translate
 
 
 def test_normalize_strips_outer_whitespace() -> None:
@@ -23,7 +23,7 @@ def test_normalize_empty_string() -> None:
     assert normalize("") == ""
 
 
-def test_parse_sub_relation_recognizes_subject_aux_det_object() -> None:
+def test_parse_relation_recognizes_subject_aux_det_object() -> None:
     tokens = [
         PosToken(text="dog", pos="NOUN"),
         PosToken(text="is", pos="AUX"),
@@ -31,10 +31,10 @@ def test_parse_sub_relation_recognizes_subject_aux_det_object() -> None:
         PosToken(text="mammal", pos="NOUN"),
     ]
 
-    assert parse_sub_relation(tokens) == SubRelation(subject="dog", sub="_sub", obj="mammal")
+    assert parse_relation(tokens) == Relation(subject="dog", rel="is_a", obj="mammal")
 
 
-def test_parse_sub_relation_rejects_unsupported_shape() -> None:
+def test_parse_relation_rejects_unsupported_shape() -> None:
     tokens = [
         PosToken(text="dog", pos="NOUN"),
         PosToken(text="can", pos="AUX"),
@@ -42,15 +42,15 @@ def test_parse_sub_relation_rejects_unsupported_shape() -> None:
     ]
 
     with pytest.raises(TranslationError):
-        parse_sub_relation(tokens)
+        parse_relation(tokens)
 
 
-def test_rule_sub_relation_emits_tagl_statement() -> None:
-    relation = SubRelation(subject="dog", sub="_sub", obj="mammal")
-    assert rule_sub_relation(relation) == ">> dog _sub mammal;"
+def test_rule_relation_emits_tagl_statement() -> None:
+    relation = Relation(subject="dog", rel="is_a", obj="mammal")
+    assert rule_relation(relation) == ">> dog is_a mammal;"
 
 
-def test_translate_sub_sentence() -> None:
+def test_translate_rel_sentence() -> None:
     fake_tokens = [
         PosToken(text="dog", pos="NOUN"),
         PosToken(text="is", pos="AUX"),
@@ -59,7 +59,7 @@ def test_translate_sub_sentence() -> None:
     ]
     assert (
         translate("dog is a mammal", pos_tagger=lambda _text: fake_tokens)
-        == ">> dog _sub mammal;"
+        == ">> dog is_a mammal;"
     )
 
 
@@ -90,7 +90,7 @@ def test_main_writes_translated_output_with_newline(monkeypatch: pytest.MonkeyPa
     )
 
     assert tagr.main() == 0
-    assert out.getvalue() == ">> dog _sub mammal;\n"
+    assert out.getvalue() == ">> dog is_a mammal;\n"
 
 
 def test_main_reports_errors_to_stderr_and_nonzero_exit(monkeypatch: pytest.MonkeyPatch) -> None:
