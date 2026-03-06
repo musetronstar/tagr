@@ -142,6 +142,7 @@ This is why spaCy must remain **behind an adapter boundary** so the NLP engine c
 - Keep I/O separate from translation logic.
 - Keep translation rules as small pure functions.
 - Organize rules analogously to grammar terminals and productions.
+- Follow the TAGL grammar rules and naming for terminals and productions as defined in `../tagd/tagl/src/parser.y`.
 - Use internal intermediate data structures rather than directly transforming raw text into TAGL strings.
 - Make rule composition explicit and testable.
 - Prefer deterministic behavior over cleverness.
