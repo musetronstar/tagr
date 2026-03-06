@@ -39,12 +39,33 @@ It should not:
 
 ## Design Principles
 
-- **TDD first**: each supported grammar pattern begins with tests
+- **TDD first**: each supported grammar pattern begins with unit tests
 - **Small pure functions**: rules should behave like grammar terminals and productions
 - **Composable pipeline**: normalization, NLP, parsing, translation, and emission stay separate
 - **Deterministic output**: the same input should produce the same TAGL
 - **Fail clearly**: unsupported or ambiguous input should be reported explicitly
 - **NLP adapter boundary**: spaCy provides linguistic analysis, while `tagr` owns the translation semantics
+
+## Translation Recovery Philosophy
+
+`tagr` is a structural translator, not a semantic validator.
+
+Use browser-style fault tolerance for parsing:
+
+- Never fail if a syntactically valid TAGL shape can still be produced.
+- Prefer best-effort TAGL `PUT` output over rejecting sparse, fragmentary, or non-sentence input.
+- Treat dictionary-style glosses, elliptical phrases, and telegraphic text as normal input.
+- Recover by deterministically extracting the best `subject`/`relator`/`object` shape from POS-tagged input.
+- Defer prerequisite tag definitions, semantic correctness, and final tagd POS validation to tagd/tagdb execution stages.
+- Raise errors only when no deterministic TAGL relation shape can be constructed.
+
+Target processing model:
+
+`input text -> best-effort POS/structure analysis -> valid TAGL-shaped output`
+
+not:
+
+`input text -> strict natural-language validation -> failure`
 
 ## Initial Architecture
 
