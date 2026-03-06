@@ -9,9 +9,7 @@ grammar patterns into TAGL, and write TAGL to STDOUT.
 """
 
 from __future__ import annotations
-
 from dataclasses import dataclass
-import re
 import sys
 
 
@@ -20,17 +18,11 @@ class TranslationError(ValueError):
 
 
 @dataclass(frozen=True)
-class IsARelation:
+class SubRelation:
     """Internal model for a subordinate `subject is a/an object` relation."""
-
     subject: str
+    sub: str
     obj: str
-
-
-_IS_A_PATTERN = re.compile(
-    r"^\s*([A-Za-z][A-Za-z0-9_-]*)\s+is\s+(?:a|an)\s+([A-Za-z][A-Za-z0-9_-]*)\s*\.?\s*$",
-    re.IGNORECASE,
-)
 
 
 def normalize(text: str) -> str:
@@ -46,21 +38,6 @@ def normalize(text: str) -> str:
     return text.strip()
 
 
-def parse_is_a(text: str) -> IsARelation:
-    """Parse the supported `subject is a/an object` sentence shape."""
-    match = _IS_A_PATTERN.match(text)
-    if not match:
-        raise TranslationError(f"Unsupported input: {text!r}")
-
-    subject, obj = match.groups()
-    return IsARelation(subject=subject.lower(), obj=obj.lower())
-
-
-def rule_is_a(relation: IsARelation) -> str:
-    """Translate an `is a` relation into TAGL syntax."""
-    return f">> {relation.subject} is_a {relation.obj};"
-
-
 def translate(text: str) -> str:
     """
     Translate normalized English text into TAGL.
@@ -71,8 +48,8 @@ def translate(text: str) -> str:
     Returns:
         TAGL output text.
     """
-    relation = parse_is_a(text)
-    return rule_is_a(relation)
+    # TODO parse `text` with spaCy and translate the spaCy POS tagged structure into TAGL
+    return tagl
 
 
 def main() -> int:

@@ -12,7 +12,7 @@ import io
 import pytest
 
 import tagr
-from tagr import IsARelation, TranslationError, normalize, parse_is_a, rule_is_a, translate
+from tagr import SubRelation, TranslationError, normalize, parse_is_a, rule_is_a, translate
 
 
 def test_normalize_strips_outer_whitespace() -> None:
@@ -24,15 +24,15 @@ def test_normalize_empty_string() -> None:
 
 
 def test_parse_is_a_recognizes_simple_pattern() -> None:
-    assert parse_is_a("dog is a mammal") == IsARelation(subject="dog", obj="mammal")
+    assert parse_is_a("dog is a mammal") == SubRelation(subject="dog", sub="is_a", obj="mammal")
 
 
 def test_parse_is_a_recognizes_an_article() -> None:
-    assert parse_is_a("dog is an animal") == IsARelation(subject="dog", obj="animal")
+    assert parse_is_a("dog is an animal") == SubRelation(subject="dog", sub="is_a", obj="animal")
 
 
 def test_rule_is_a_emits_tagl_statement() -> None:
-    relation = IsARelation(subject="dog", obj="mammal")
+    relation = SubRelation(subject="dog", sub="is_a", obj="mammal")
     assert rule_is_a(relation) == ">> dog is_a mammal;"
 
 
