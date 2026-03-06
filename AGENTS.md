@@ -147,6 +147,11 @@ This is why spaCy must remain **behind an adapter boundary** so the NLP engine c
 - Make rule composition explicit and testable.
 - Prefer deterministic behavior over cleverness.
 - Keep spaCy behind an adapter boundary.
+- Focus translation on producing syntactically valid TAGL PUT statement shapes: `>> <subject> <relator> <object>;`.
+- Use `sub`/`subordinate relation` terminology in parser/rule design; do not couple architecture to specific hard tags such as `_is_a`.
+- Do not hard-code natural-language lexical tokens (for example: `is`, `a`, `an`, `can`) as grammar logic. Use POS-tagged structures and word classes.
+- Treat relator construction as shape-driven TAGLization (for example, relator token sequence joined with `_`) and defer final semantic POS resolution (`POS_SUB_RELATOR` vs `POS_RELATOR`) to tagd/tagdb integration.
+- Assume prerequisite tag definitions and `lookup_pos`-based validation happen later at TAGL execution time; `tagr` is responsible for deterministic shape translation now.
 
 ## spaCy Integration Rules
 
@@ -177,6 +182,7 @@ Examples of desirable decomposition:
 - phrase-level recognition
 - sentence-pattern recognition
 - TAGL emission
+- relation-shape extraction (`subject`, `relator`, `object`) from POS-tagged token sequences
 
 Each rule should:
 
@@ -184,6 +190,7 @@ Each rule should:
 - be testable in isolation
 - avoid side effects
 - avoid hidden global state
+- remain language-portable by relying on POS classes and structures rather than language-specific token literals
 
 ## Error Handling
 
