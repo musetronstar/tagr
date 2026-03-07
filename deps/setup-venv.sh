@@ -14,7 +14,13 @@ if [[ ! -f "$REQ_FILE" ]]; then
     exit 1
 fi
 
-if [[ ! -d "$VENV_DIR" ]]; then
+if [[ ! -f "$VENV_DIR/bin/activate" ]]; then
+    if [[ -d "$VENV_DIR" ]]; then
+        echo "error: existing directory is not a valid venv: $VENV_DIR" >&2
+        echo "remove it manually and rerun:" >&2
+        echo "  rm -rf \"$VENV_DIR\"" >&2
+        exit 1
+    fi
     echo "Creating virtual environment at $VENV_DIR"
     python3 -m venv "$VENV_DIR"
 else
@@ -38,4 +44,6 @@ else
     echo "spaCy model already installed: $SPACY_MODEL"
 fi
 
-echo "Done"
+echo "Done."
+echo "Enter environment with:"
+echo "  source .venv/bin/activate"
