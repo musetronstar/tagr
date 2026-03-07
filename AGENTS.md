@@ -2,251 +2,301 @@
 
 ## Purpose
 
-This repository contains a Python program named `tagr` that we intent to
-translate English text from `STDIN` into TAGL on `STDOUT`.
+`tagr` is a Python program that translates English text from `STDIN` into TAGL on `STDOUT`.
 
 ## Goal
 
-Build a small, test-driven pipeline that:
+Build a deterministic, test-driven pipeline that:
 
-1. reads English from `STDIN`
-2. cleans and normalizes the text
-3. tokenizes and POS-tags it with spaCy
-4. parses supported grammar structures
+1. reads English text from `STDIN`
+2. normalizes input
+3. performs NLP analysis (tokenization + NLP POS tagging)
+4. extracts structural relations
 5. applies pure translation rules
-6. writes valid TAGL to `STDOUT`
+6. emits valid TAGL output on `STDOUT`
 
-## Scope
+## Terminology
 
-Start intentionally narrow.
+Three concepts must not be conflated.
 
-It should:
+### NLP POS
 
-- start with a very small subset of English sentence patterns,
-  but eventually support Universal Dependencies
-- use deterministic translation rules
-- break translation into small pure functions
-- keep grammar recognition separate from I/O
-- use spaCy as the NLP layer for tokenization, POS tagging, and parsing
+Part-of-speech tags produced by the NLP engine.
 
-It should not:
+Examples:
 
-- try to understand arbitrary natural language
-- silently guess when input is ambiguous
-- mix parsing logic with CLI code
-- become one large “magic” translation function
-- let spaCy-specific objects leak through the whole codebase
+- spaCy POS (`token.pos_`)
+- Universal Dependencies POS classes (`DET`, `NOUN`, `VERB`, `ADJ`, `ADV`)
 
-## Design Principles
+Use the terms `NLP POS` or `spaCy POS` when relevant.
 
-- **TDD first**: each supported grammar pattern begins with unit tests
-- **Small pure functions**: rules should behave like grammar terminals and productions
-- **Composable pipeline**: normalization, NLP, parsing, translation, and emission stay separate
-- **Deterministic output**: the same input should produce the same TAGL
-- **Fail clearly**: unsupported or ambiguous input should be reported explicitly
-- **NLP adapter boundary**: spaCy provides linguistic analysis, while `tagr` owns the translation semantics
+### TAGL grammar terms
 
-## Translation Recovery Philosophy
+Productions, terminals, and parser terminology defined in:
 
-`tagr` is a *structural translator*, not a semantic validator.
+`../tagd/tagl/src/parser.y`
 
-Use browser-style fault tolerance for parsing:
+During development, the `tagd` repository is assumed to exist at:
 
-- Never fail if a syntactically valid TAGL shape can still be produced.
-- Prefer best-effort TAGL `PUT` output over rejecting sparse, fragmentary, or non-sentence input.
-- Treat dictionary-style glosses, elliptical phrases, and telegraphic text as normal input.
-- Recover by deterministically extracting the best `subject`/`relator`/`object` shape from POS-tagged input.
-- Defer prerequisite tag definitions, semantic correctness, and final tagd POS validation to tagd/tagdb execution stages.
-- Raise errors only when no deterministic TAGL relation shape can be constructed.
+`../tagd/`
+
+### tagd POS
+
+Semantic tag types defined by tagd, for example:
+
+- `tagd::POS_RELATOR`
+- `tagd::POS_SUB_RELATOR`
+- `tagd::POS_TAG`
+
+### Naming guidance
+
+Code, tests, comments, and docs should clearly distinguish:
+
+- `NLP POS`
+- `TAGL grammar terms`
+- `tagd POS`
+
+Prefer names that make the layer obvious, e.g.:
+
+- `nlp_pos_sequence`
+- `tagl_relator`
+- `tagd_pos_type`
+
+## Translation Contract
+
+`tagr` is a deterministic structural translator.
+
+Input may include:
+
+- normal sentences
+- dictionary-like definitions
+- sparse phrases or fragments
+
+Output must be syntactically valid TAGL PUT statement shapes.
+
+Agents must:
+
+- translate by structure, not guesswork
+- extract deterministic `subject relator object` shapes from NLP POS structures
+- prefer best-effort valid TAGL when a clear structural relation exists
+- implement translation rules as small, testable, pure functions
+- rely on POS classes and structural patterns rather than literal words
+
+Agents must not:
+
+- invent semantic meaning not supported by structure
+- hard-code English lexical tokens as grammar rules
+- couple translation logic to specific hard TAGL tags such as `_is_a`
+- reject input merely because it is not a complete sentence
+
+If no deterministic relation shape can be constructed, raise an explicit error.
 
 Target processing model:
 
 `input text -> best-effort POS/structure analysis -> valid TAGL-shaped output`
 
-not:
+Not:
 
 `input text -> strict natural-language validation -> failure`
 
-## Initial Architecture
+## Scope
+
+Initial scope should remain intentionally narrow.
+
+The system should:
+
+- support a small subset of English grammar first
+- expand incrementally toward Universal Dependencies
+- remain deterministic
+- separate parsing from I/O
+- keep NLP engine details behind an adapter layer
+
+The system should not:
+
+- attempt full natural-language understanding
+- silently guess ambiguous meaning
+- become a monolithic translator
+
+## Design Principles
+
+- TDD first
+- small pure functions
+- deterministic translation
+- composable pipeline
+- clear error behavior
+- NLP adapter boundary
+
+## Architecture
+
+Current repository layout:
 
 ```text
 tagr/
-  tagr.py         # main entry point
-  test_tagr.py    # unit tests
+  tagr.py
+  test_tagr.py
 ```
 
-### Sections (Areas of Concern)
+Logical areas of concern:
 
-Whether as functions, classes or modules here are the areas of concern:
+- `cli` - STDIN -> pipeline -> STDOUT
+- `normalize` - input normalization
+- `nlp` - NLP adapter (spaCy)
+- `parse` - structural parsing
+- `rules` - translation rules
+- `emit` - TAGL formatting
+- `models` - internal structures
+- `errors` - translation errors
 
-- cli          # STDIN -> pipeline -> STDOUT
-- normalize    # cleaning and normalization
-- nlp          # spaCy adapter layer
-- parse        # parse structures / grammar units
-- rules        # pure translation rules
-- emit         # TAGL output formatting
-- models       # internal data structures
-- errors       # translation / parse errors
+Modules may be introduced gradually as the system evolves.
 
-## Dependency Strategy
+## Development Workflow
 
-Keep dependencies minimal but practical.
+Development should be incremental and test-driven.
 
-Core dependencies:
+Rules:
 
-- **spaCy** for tokenization, POS tagging, and dependency parsing
-- **pytest** for tests
-
-Use spaCy only as the NLP layer. Convert spaCy output into internal project data structures such as tokens, phrases, and sentence representations before applying translation rules.
-
-## Testing Strategy
-
-- unit tests for normalization
-- unit tests for NLP adapter output shaping
-- unit tests for parse-unit recognition
-- unit tests for each pure translation rule
-- unit tests for TAGL emission
-- end-to-end tests from English input to TAGL output
-
-## Development Style
-
-Use an iterative, test-driven development approach.
-
-For each new feature:
-
-1. write or update tests first
-2. implement the smallest change needed
-3. refactor only after tests pass
-
-## Priorities
-
-Focus on a narrow but clean pipeline:
-
-- read from `STDIN`
-- normalize input
-- analyze text with spaCy
-- convert spaCy output into internal structures
-- parse supported grammar units
-- translate parse structures into TAGL
-- write TAGL to `STDOUT`
+- add or update tests first
+- prefer minimal, reviewable diffs
+- prefer modifying existing code before introducing new abstractions
+- avoid broad speculative refactors unless they clearly support the requested change
 
 ## Dependency Policy
 
-Keep dependencies minimal, but be pragmatic.
+Dependencies should remain minimal.
 
-Approved core dependencies:
+Approved dependencies:
 
-- **spaCy** for tokenization, POS tagging, and dependency parsing
-- **pytest** for automated testing
+- spaCy
+- pytest
 
-Do not add new dependencies without clear justification.
+Do not introduce additional dependencies without clear justification.
 
-### Future NLP Engine Considerations
+### Future NLP engines
 
-spaCy is the initial NLP engine because it offers a practical and productive development experience.
+spaCy is the initial NLP engine.
 
-However, `tagr` should remain architecturally capable of switching NLP backends.
+If spaCy becomes limiting, especially for:
 
-If spaCy becomes limiting—particularly regarding:
+- strict Universal Dependencies alignment
+- richer morphological features
+- multilingual UD consistency
 
-- strict **Universal Dependencies (UD)** requirements
-- richer **morphological features**
-- **multilingual UD consistency**
-- or any feature where **Stanza provides a clearly superior implementation**
+maintainers should evaluate Stanza.
 
-then maintainers should evaluate adding or replacing the NLP adapter with **Stanza**.
+spaCy must remain behind an adapter boundary so the NLP engine can be replaced.
 
-This is why spaCy must remain **behind an adapter boundary** so the NLP engine can be swapped with minimal impact on the rest of the system.
+## TAGL Grammar Grounding
 
-In its prototype form, we are creating a *structural translator* but in the future, we might add options
-for strict parsing and semantic validations (e.g. like TAGL::driver::lookup_pos() is used in the TAGL parser driver).
+`tagr` translation logic must be grounded in:
 
-## Architectural Rules
+`../tagd/tagl/src/parser.y`
 
-- Keep I/O separate from translation logic.
-- Keep translation rules as small pure functions.
-- Organize rules analogously to grammar terminals and productions.
-- Follow the TAGL grammar rules and naming for terminals and productions as defined in `../tagd/tagl/src/parser.y`.
-- Use internal intermediate data structures rather than directly transforming raw text into TAGL strings.
-- Make rule composition explicit and testable.
-- Prefer deterministic behavior over cleverness.
-- Keep spaCy behind an adapter boundary.
-- Focus translation on producing syntactically valid TAGL PUT statement shapes: `>> <subject> <relator> <object>;`.
-- Use `sub`/`subordinate relation` terminology in parser/rule design; do not couple architecture to specific hard tags such as `_is_a`.
-- Do not hard-code natural-language lexical tokens (for example: `is`, `a`, `an`, `can`) as grammar logic. Use POS-tagged structures and word classes.
-- Treat relator construction as shape-driven TAGLization (for example, relator token sequence joined with `_`) and defer final semantic POS resolution (`POS_SUB_RELATOR` vs `POS_RELATOR`) to tagd/tagdb integration.
-- Assume prerequisite tag definitions and `lookup_pos`-based validation happen later at TAGL execution time; `tagr` is responsible for deterministic shape translation now.
+This grammar is the canonical source for:
+
+- production names
+- terminal names
+- parser terminology
+- relation terminology used in code, comments, tests, and docs
+
+Agents should:
+
+- follow `parser.y` naming for TAGL-side structures
+- prefer TAGL grammar terminology over ad hoc wording for TAGL-side structure
+- keep NLP terms for NLP-side analysis only
+- keep tagd terms for tagd semantic validation only
+
+Agents should not:
+
+- invent alternate parser terminology when grammar terms already exist
+- introduce naming that drifts from `parser.y` without reason
+- use English surface labels when a TAGL grammar name is available
 
 ## spaCy Integration Rules
 
-- Use spaCy as an NLP provider, not as the owner of project semantics.
-- Convert spaCy tokens, tags, and dependencies into internal project models before applying translation rules.
-- Avoid spreading direct spaCy object usage throughout the codebase.
-- Keep grammar and TAGL mapping rules independent from spaCy-specific APIs wherever practical.
+- use spaCy as an NLP provider, not project semantics owner
+- convert spaCy tokens/tags/dependencies into internal models before rules
+- do not let spaCy objects leak across the codebase
+- keep grammar and TAGL mapping logic independent from spaCy APIs where practical
+
+## Architectural Rules
+
+- keep I/O separate from translation logic
+- keep translation rules small and pure
+- keep behavior deterministic
+- use internal intermediate data structures
+- follow TAGL grammar naming from `parser.y` for TAGL-side names
+- use `sub` / `subordinate relation` terminology for parser-rule design where applicable
+
+TAGL output target shape:
+
+`>> <subject> <relator> <object>;`
+
+Relator construction should be shape-driven TAGLization (e.g., joining relator token sequences with `_`).
+
+Semantic validation using tagd POS is deferred to tagd/tagdb execution time. `tagr` is responsible for deterministic structural translation.
+
+In this prototype stage, structural translation is primary; strict semantic validation modes may be added later.
 
 ## Coding Rules
 
 - Python only
-- small functions
-- no giant monolithic translator function
+- small focused functions
+- avoid monolithic translator functions
 - type hints where practical
+- readable code over clever code
 - minimal dependencies
-- keep modules focused on one responsibility
-- write readable code over clever code
 
-## Rule Design Expectations
+Code should clearly distinguish NLP POS, TAGL grammar terms, and tagd POS.
 
-Translation rules should be broken into building blocks.
+## Rule Design
 
-Examples of desirable decomposition:
+Translation rules should be decomposed into:
 
-- normalization rules
-- token-level recognition
-- POS-based matching
-- phrase-level recognition
-- sentence-pattern recognition
+- normalization
+- token recognition
+- NLP POS pattern matching
+- phrase recognition
+- relation-shape extraction (`subject`, `relator`, `object`)
 - TAGL emission
-- relation-shape extraction (`subject`, `relator`, `object`) from POS-tagged token sequences
 
 Each rule should:
 
-- have a clear input and output
+- declare or make clear the NLP POS pattern it matches
+- use TAGL grammar terminology where applicable
+- have explicit inputs and outputs
 - be testable in isolation
 - avoid side effects
 - avoid hidden global state
-- remain language-portable by relying on POS classes and structures rather than language-specific token literals
+- remain language-portable by relying on POS classes/structures rather than lexical literals
+
+Grammar behavior should be traceable:
+
+`test -> rule -> emitted TAGL`
 
 ## Error Handling
 
-- Do not silently invent meaning for ambiguous input.
-- Fail clearly when input is unsupported.
-- Surface errors through explicit return values or exceptions.
-- Preserve debuggability.
-- Do not pollute `STDOUT` with diagnostics.
+- do not invent ambiguous meaning
+- unsupported input should produce explicit errors
+- diagnostics belong on `STDERR`
+- `STDOUT` should contain only valid TAGL output
 
-## Output Rules
+## Testing
 
-- Final output must be valid TAGL text on `STDOUT`.
-- Diagnostics and debug information belong on `STDERR` or in tests.
-- Keep TAGL formatting consistent and deterministic.
-
-## Testing Requirements
-
-Add or update tests for every behavior change.
-
-At minimum, cover:
+Tests should cover:
 
 - normalization
-- NLP adapter shaping
-- parse-unit recognition
+- NLP adapter behavior
+- parse/grammar recognition
 - translation rules
 - TAGL emission
-- end-to-end pipeline behavior
+- end-to-end translation
+
+Every behavior change should include tests.
 
 ## Avoid
 
-- large speculative refactors
-- premature support for broad English coverage
-- hidden guessing
-- mixing parsing, translation, and CLI concerns
-- introducing heavy dependencies without clear need
+- speculative refactors
+- premature broad English coverage
+- hidden heuristics
+- mixing CLI and parsing/translation concerns
+- unnecessary dependencies
