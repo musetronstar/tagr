@@ -48,7 +48,7 @@ It should not:
 
 ## Translation Recovery Philosophy
 
-`tagr` is a structural translator, not a semantic validator.
+`tagr` is a *structural translator*, not a semantic validator.
 
 Use browser-style fault tolerance for parsing:
 
@@ -157,6 +157,9 @@ If spaCy becomes limiting—particularly regarding:
 then maintainers should evaluate adding or replacing the NLP adapter with **Stanza**.
 
 This is why spaCy must remain **behind an adapter boundary** so the NLP engine can be swapped with minimal impact on the rest of the system.
+
+In its prototype form, we are creating a *structural translator* but in the future, we might add options
+for strict parsing and semantic validations (e.g. like TAGL::driver::lookup_pos() is used in the TAGL parser driver).
 
 ## Architectural Rules
 

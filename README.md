@@ -1,12 +1,20 @@
 # tagr
 
-`tagr` is a Python prototype that translates English text from `STDIN` into TAGL on `STDOUT`.
+`tagr` translates natural language  text from `STDIN` into TAGL on `STDOUT`.
+
+In this prototype form, it is a *structural translator* in that it produces
+output in the *shape* of valid TAGL statements. It will try to produce valid
+output even in the face of input errors - analagous to how web browsers
+still do their best to produce a valid DOM tree in the face of HTML errors.
+
+In the future, we might add options for strict semantic validation
+where the tags must be defined having the correct tagd POS types.
 
 ## Usage
 
 ```bash
 echo "tagd is a semantic-relational engine" | tagr
->> tagd is_a semantic_relational engine;
+>> tagd is_a semantic_relational_engine;
 ```
 
 ## Examples
