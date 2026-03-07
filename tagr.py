@@ -148,6 +148,65 @@ def rule_relation(relation: Relation) -> str:
     return f">> {relation.subject} {relation.relator} {relation.obj};"
 
 
+def rule_relations(relations: list[Relation]) -> str:
+    """Translate one or more parsed relations into TAGL output."""
+    if not relations:
+        raise TranslationError("Unsupported input: no relation to emit")
+
+    if len(relations) == 1:
+        return rule_relation(relations[0])
+
+    subject = relations[0].subject
+    lines = [f">> {subject} {relations[0].relator} {relations[0].obj}"]
+
+    for relation in relations[1:]:
+        if relation.subject == subject:
+            lines.append(f"{relation.relator} {relation.obj}")
+        else:
+            lines.append(f">> {relation.subject} {relation.relator} {relation.obj}")
+
+    lines[-1] = f"{lines[-1]};"
+    return "\n".join(lines)
+
+
+def parse_relations(tokens: list[PosToken]) -> list[Relation]:
+    """Parse one or two relation clauses, including `... and ...` form."""
+    lexical_tokens = [token for token in tokens if token.pos != "PUNCT"]
+    if lexical_tokens and lexical_tokens[0].pos == "DET":
+        lexical_tokens = lexical_tokens[1:]
+
+    if lexical_tokens and lexical_tokens[0].pos in _SUBJECT_POS:
+        quantified_relation = _parse_quantified_object_relation(
+            lexical_tokens[0], lexical_tokens[1:]
+        )
+        if quantified_relation is not None:
+            return [quantified_relation]
+
+    conjunction_indexes = [
+        idx
+        for idx, token in enumerate(lexical_tokens)
+        if token.pos == "CCONJ" and token.text.lower() == "and"
+    ]
+
+    if not conjunction_indexes:
+        return [parse_relation(lexical_tokens)]
+
+    split_idx = conjunction_indexes[0]
+    left_clause = lexical_tokens[:split_idx]
+    right_clause = lexical_tokens[split_idx + 1 :]
+    if not left_clause or not right_clause:
+        raise TranslationError("Unsupported input: invalid conjunction structure")
+
+    left_relation = parse_relation(left_clause)
+
+    if right_clause[0].pos in _SUBJECT_POS:
+        right_relation = parse_relation(right_clause)
+    else:
+        right_relation = parse_relation([left_clause[0], *right_clause])
+
+    return [left_relation, right_relation]
+
+
 def translate(
     text: str, alt_tagger: Callable[[str], list[PosToken]] | None = None
 ) -> str:
@@ -163,8 +222,8 @@ def translate(
     """
     tagger = alt_tagger or pos_tag
     tokens = tagger(text)
-    relation = parse_relation(tokens)
-    return rule_relation(relation)
+    relations = parse_relations(tokens)
+    return rule_relations(relations)
 
 
 def main() -> int:

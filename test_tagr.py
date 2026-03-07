@@ -115,6 +115,26 @@ def test_translate_predicate_with_modifier_quantifier() -> None:
     )
 
 
+def test_translate_subordinate_with_predicate() -> None:
+    fake_tokens = [
+        PosToken(text="dog", pos="NOUN"),
+        PosToken(text="is", pos="AUX"),
+        PosToken(text="a", pos="DET"),
+        PosToken(text="mammal", pos="NOUN"),
+        PosToken(text="and", pos="CCONJ"),
+        PosToken(text="can", pos="AUX"),
+        PosToken(text="bark", pos="VERB"),
+    ]
+
+    assert (
+        translate(
+            "dog is a mammal and can bark",
+            alt_tagger=lambda _text: fake_tokens,
+        )
+        == ">> dog is_a mammal\ncan bark;"
+    )
+
+
 def test_main_writes_translated_output_with_newline(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("sys.stdin", io.StringIO("A dog can bark."))
     out = io.StringIO()
