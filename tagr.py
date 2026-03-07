@@ -82,6 +82,33 @@ def _taglize(tokens: list[PosToken]) -> str:
     return "_".join(token.text.lower() for token in tokens)
 
 
+def _parse_quantified_object_relation(subject: PosToken, tail_tokens: list[PosToken]) -> Relation | None:
+    """Parse `subject has 4 legs and a tail`-like shape into a single relation."""
+    if len(tail_tokens) < 6:
+        return None
+
+    relator, qty, quantified_obj, conjunction, *rest = tail_tokens
+    if qty.pos != "NUM":
+        return None
+    if quantified_obj.pos not in _SUBJECT_POS:
+        return None
+    if conjunction.pos != "CCONJ":
+        return None
+
+    remainder = [token for token in rest if token.pos != "DET"]
+    if len(remainder) != 1:
+        return None
+    trailing_obj = remainder[0]
+    if trailing_obj.pos not in _SUBJECT_POS:
+        return None
+
+    return Relation(
+        subject=subject.text.lower(),
+        relator=_taglize([relator]),
+        obj=f"{quantified_obj.text.lower()} = {qty.text.lower()}, {trailing_obj.text.lower()}",
+    )
+
+
 def parse_relation(tokens: list[PosToken]) -> Relation:
     """Parse POS-tagged text into a `subject relator object` relation shape."""
     lexical_tokens = [token for token in tokens if token.pos != "PUNCT"]
@@ -98,6 +125,10 @@ def parse_relation(tokens: list[PosToken]) -> Relation:
 
     if subject.pos not in _SUBJECT_POS:
         raise TranslationError("Unsupported input: subject must be noun-like")
+
+    quantified_relation = _parse_quantified_object_relation(subject, lexical_tokens[1:])
+    if quantified_relation is not None:
+        return quantified_relation
 
     if not relator_tokens:
         raise TranslationError("Unsupported input: missing relator")
@@ -117,18 +148,20 @@ def rule_relation(relation: Relation) -> str:
     return f">> {relation.subject} {relation.relator} {relation.obj};"
 
 
-def translate(text: str, pos_tagger: Callable[[str], list[PosToken]] | None = None) -> str:
+def translate(
+    text: str, alt_tagger: Callable[[str], list[PosToken]] | None = None
+) -> str:
     """
     Translate normalized English text into TAGL.
 
     Args:
         text: Normalized English input.
-        pos_tagger: Optional POS tagging function for tests or alternate adapters.
+        alt_tagger: Optional POS tagging function for tests or alternate adapters.
 
     Returns:
         TAGL output text.
     """
-    tagger = pos_tagger or pos_tag
+    tagger = alt_tagger or pos_tag
     tokens = tagger(text)
     relation = parse_relation(tokens)
     return rule_relation(relation)

@@ -64,7 +64,7 @@ def test_rule_relation_emits_tagl_statement() -> None:
     assert rule_relation(relation) == ">> dog is_a mammal;"
 
 
-def test_translate_subordinate_example() -> None:
+def test_translate_subordinate() -> None:
     fake_tokens = [
         PosToken(text="A", pos="DET"),
         PosToken(text="dog", pos="NOUN"),
@@ -74,7 +74,7 @@ def test_translate_subordinate_example() -> None:
     ]
 
     assert (
-        translate("A dog is a mammal.", pos_tagger=lambda _text: fake_tokens)
+        translate("A dog is a mammal.", alt_tagger=lambda _text: fake_tokens)
         == ">> dog is_a mammal;"
     )
 
@@ -88,8 +88,30 @@ def test_translate_predicate_example() -> None:
     ]
 
     assert (
-        translate("A dog can bark.", pos_tagger=lambda _text: fake_tokens)
+        translate("A dog can bark.", alt_tagger=lambda _text: fake_tokens)
         == ">> dog can bark;"
+    )
+
+
+def test_translate_predicate_with_modifier_quantifier() -> None:
+    fake_tokens = [
+        PosToken(text="A", pos="DET"),
+        PosToken(text="dog", pos="NOUN"),
+        PosToken(text="has", pos="VERB"),
+        PosToken(text="4", pos="NUM"),
+        PosToken(text="legs", pos="NOUN"),
+        PosToken(text="and", pos="CCONJ"),
+        PosToken(text="a", pos="DET"),
+        PosToken(text="tail", pos="NOUN"),
+        PosToken(text=".", pos="PUNCT"),
+    ]
+
+    assert (
+        translate(
+            "A dog has 4 legs and a tail.",
+            alt_tagger=lambda _text: fake_tokens,
+        )
+        == ">> dog has legs = 4, tail;"
     )
 
 
