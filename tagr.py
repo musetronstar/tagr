@@ -169,42 +169,113 @@ def rule_relations(relations: list[Relation]) -> str:
     return "\n".join(lines)
 
 
-def parse_relations(tokens: list[PosToken]) -> list[Relation]:
-    """Parse one or two relation clauses, including `... and ...` form."""
+def _split_on_comma(tokens: list[PosToken]) -> list[list[PosToken]]:
+    """Split token stream into segments using comma punctuation."""
+    segments: list[list[PosToken]] = []
+    current: list[PosToken] = []
+    for token in tokens:
+        if token.pos == "PUNCT" and token.text == ",":
+            if current:
+                segments.append(current)
+                current = []
+            continue
+        current.append(token)
+    if current:
+        segments.append(current)
+    return segments or [tokens]
+
+
+def _normalize_clause_tokens(tokens: list[PosToken]) -> list[PosToken]:
+    """Drop punctuation and optional leading determiner from a clause."""
     lexical_tokens = [token for token in tokens if token.pos != "PUNCT"]
     if lexical_tokens and lexical_tokens[0].pos == "DET":
         lexical_tokens = lexical_tokens[1:]
+    return lexical_tokens
 
-    if lexical_tokens and lexical_tokens[0].pos in _SUBJECT_POS:
-        quantified_relation = _parse_quantified_object_relation(
-            lexical_tokens[0], lexical_tokens[1:]
-        )
+
+def _parse_clause_relations(
+    clause_tokens: list[PosToken], inherited_subject: PosToken | None = None
+) -> list[Relation]:
+    """Parse one clause into one or more relations, using subject inheritance if needed."""
+    if not clause_tokens:
+        return []
+
+    tokens = clause_tokens
+    if tokens[0].pos not in _SUBJECT_POS and inherited_subject is not None:
+        tokens = [inherited_subject, *tokens]
+
+    subject_token = tokens[0]
+    if subject_token.pos in _SUBJECT_POS:
+        quantified_relation = _parse_quantified_object_relation(subject_token, tokens[1:])
         if quantified_relation is not None:
             return [quantified_relation]
 
     conjunction_indexes = [
         idx
-        for idx, token in enumerate(lexical_tokens)
+        for idx, token in enumerate(tokens)
         if token.pos == "CCONJ" and token.text.lower() == "and"
     ]
+    if conjunction_indexes:
+        split_idx = conjunction_indexes[0]
+        left_clause = tokens[:split_idx]
+        right_clause = tokens[split_idx + 1 :]
+        if not left_clause or not right_clause:
+            raise TranslationError("Unsupported input: invalid conjunction structure")
 
-    if not conjunction_indexes:
-        return [parse_relation(lexical_tokens)]
+        left_relation = parse_relation(left_clause)
+        if right_clause[0].pos in _SUBJECT_POS:
+            right_relation = parse_relation(right_clause)
+        else:
+            right_relation = parse_relation([left_clause[0], *right_clause])
+        return [left_relation, right_relation]
 
-    split_idx = conjunction_indexes[0]
-    left_clause = lexical_tokens[:split_idx]
-    right_clause = lexical_tokens[split_idx + 1 :]
-    if not left_clause or not right_clause:
-        raise TranslationError("Unsupported input: invalid conjunction structure")
+    for idx, token in enumerate(tokens[1:], start=1):
+        if token.pos not in {"PRON", "SCONJ"}:
+            continue
+        left_clause = tokens[:idx]
+        right_clause = tokens[idx + 1 :]
+        if not right_clause:
+            continue
+        try:
+            left_relation = parse_relation(left_clause)
+            if right_clause[0].pos in _SUBJECT_POS:
+                right_relation = parse_relation(right_clause)
+            else:
+                right_relation = parse_relation([left_clause[0], *right_clause])
+            return [left_relation, right_relation]
+        except TranslationError:
+            continue
 
-    left_relation = parse_relation(left_clause)
+    return [parse_relation(tokens)]
 
-    if right_clause[0].pos in _SUBJECT_POS:
-        right_relation = parse_relation(right_clause)
-    else:
-        right_relation = parse_relation([left_clause[0], *right_clause])
 
-    return [left_relation, right_relation]
+def parse_relations(tokens: list[PosToken]) -> list[Relation]:
+    """Parse one or more relation clauses, including subject inheritance across clauses."""
+    clauses = _split_on_comma(tokens)
+
+    if len(clauses) == 1:
+        return _parse_clause_relations(_normalize_clause_tokens(clauses[0]))
+
+    relations: list[Relation] = []
+    subject_token: PosToken | None = None
+
+    for clause in clauses:
+        clause_tokens = _normalize_clause_tokens(clause)
+        if not clause_tokens:
+            continue
+
+        clause_relations = _parse_clause_relations(
+            clause_tokens, inherited_subject=subject_token
+        )
+        relations.extend(clause_relations)
+
+        if clause_tokens[0].pos in _SUBJECT_POS:
+            subject_token = clause_tokens[0]
+
+    if not relations:
+        raise TranslationError("Unsupported input: no relation to emit")
+
+    return relations
 
 
 def translate(
