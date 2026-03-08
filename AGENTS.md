@@ -37,9 +37,9 @@ During development, the `tagd` repository is assumed to exist at:
 `../tagd/`
 
 
-### PUT Grammar:
+### PUT Grammar
 
-`../tagd/README.md` contains BNF grammars for TAGL statments
+`../tagd/README.md` contains BNF grammar examples for TAGL statements:
 
 ```
 put_statement ::= ">>" subject_sub_relation relations
@@ -66,9 +66,11 @@ object ::= TAG EQUALS QUOTED_STR
 object ::= TAG
 ```
 
-But The actual productions, terminals, and parser terminology defined in our lemon parser:
+However, the canonical productions, terminals, and parser terminology are defined in:
 
 `../tagd/tagl/src/parser.y`
+
+Use `README.md` for quick orientation and `parser.y` as the source of truth.
 
 ### tagd POS
 
@@ -190,6 +192,9 @@ Rules:
 - prefer modifying existing code before introducing new abstractions
 - avoid broad speculative refactors unless they clearly support the requested change
 
+Exploration documents under `docs/` (for example, `docs/voa-starter-grammar.md`) are non-normative.
+`AGENTS.md` plus repository tests define current required behavior.
+
 ## Dependency Policy
 
 Dependencies should remain minimal.
@@ -263,9 +268,17 @@ TAGL output target shape:
 
 Relator construction should be shape-driven TAGLization (e.g., joining relator token sequences with `_`).
 
+When multiple objects share the same relator, emit one `predicate_list` with an `object_list`:
+
+`>> <subject> <relator> <object_a>, <object_b>;`
+
+Emit each PUT statement on a single line on `STDOUT`.
+
 Semantic validation using tagd POS is deferred to tagd/tagdb execution time. `tagr` is responsible for deterministic structural translation.
 
 In this prototype stage, structural translation is primary; strict semantic validation modes may be added later.
+
+If a structural relation exists but no explicit relator can be deterministically extracted, `_rel` is the only allowed fallback relator.
 
 ## Coding Rules
 
@@ -298,6 +311,8 @@ Each rule should:
 - avoid side effects
 - avoid hidden global state
 - remain language-portable by relying on POS classes/structures rather than lexical literals
+
+For starter grammar growth, prefer explicit rule profiles backed by tests (for example: adjective-phrase definitions, `to VERB` chains, and noun-gloss synonym shapes).
 
 Grammar behavior should be traceable:
 

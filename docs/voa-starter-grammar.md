@@ -3,7 +3,7 @@
 This document is a **working hypothesis for initial rule exploration**.
 Actual rules will be confirmed through tests in the repository.
 
-AGENTS.md supercedes this and contains the **development and design rules**.
+AGENTS.md supersedes this and contains the **development and design rules**.
 
 This document describes a **small starter rule set (5 rules)** for translating
 VOA Wordbook dictionary definitions into TAGL.
@@ -12,7 +12,7 @@ The goal is not full natural language understanding. The goal is **deterministic
 structural extraction** of a relation shape that can be expressed as a TAGL
 `PUT` statement.
 
-# PUT Grammar:
+# PUT Grammar
 
 ```
 put_statement ::= ">>" subject_sub_relation relations
@@ -41,15 +41,7 @@ object ::= TAG
 
 General pipeline:
 
-input text
-↓
-NLP analysis (tokens + NLP POS)
-↓
-pattern match
-↓
-(subject, relator, object)
-↓
->> subject relator object;
+`input text -> NLP analysis (tokens + NLP POS) -> pattern match -> (subject, relator, object) -> TAGL PUT`
 
 These rules should be implemented as **small pure translation rules** and
 verified through unit tests.
@@ -90,12 +82,12 @@ RULE: multi-token relators may be joined with "_" during TAGLization
 
 >> able having power to_do something;
 
-Rule: 
+Rule:
 
 As a *structural translator*, we want to create a best fit to TAGL syntax.
 We might not always have a subordinate relation given between the word and the gloss.
 At this point we don't do semantic validation (though it would be a powerful option to have in the future).
-Many of the put statements, though being structurally sound, might not have been defined yet with a subordinate relation. That's okay for now. We will develop strategies to resolve that later.
+Many PUT statements, though structurally sound, might not yet have a subordinate relation. That's okay for now; we will develop strategies later.
 We should not inject relations that don't exist in the text except `_rel` as a *controlled structural fallback* when needed to produce structurally valid TAGL.
 For now, let's create a structural translation that does not presuppose anything except `_rel` (for now) - rather we should try to faithfully represent only what is provided in the gloss.
 
@@ -154,10 +146,10 @@ object  = show
 
 TAGL:
 
-In this example here we fallback to `_rel` which is safer than _sub because subordinate relations define identity and position within the tagspace tree.
+In this example we fallback to `_rel`, which is safer than `_sub` because subordinate relations define identity and position within the tagspace tree.
 I don't see any way around the fallback until we build up robustness and intelligence of the system (later).
 
-This is a legal TAGL statment having repeated relators without an `object_list`:
+This is a legal TAGL statement having repeated relators without an `object_list`:
 
 >> actor _rel someone
 acting play
@@ -168,7 +160,7 @@ Canonically, in tagspace dumps, we use more compact `object_list` and put a newl
 >> actor _rel someone
 acting play, show;
 
-But to make it line oriented and grep-able, the entire put statment should be one line:
+But to make it line-oriented and grep-able, the entire PUT statement should be one line:
 RULE: repeated relators must be compacted into an `object_list`.
 
 >> actor _rel someone acting play, show;
@@ -199,7 +191,7 @@ object = change
 relator = through
 object = action
 
-I would think that "one" might be too ambigous for Simple English, because its means a person, not a number. But nonetheless, we have to deal with it.
+`one` is ambiguous in Simple English because it often means a person, not a number. We still need deterministic handling.
 
 TAGL:
 
@@ -229,12 +221,12 @@ object  = unplanned_event
 
 TAGL:
 
-Using reason and intelligent inference, we might define with a proper sub relations as below,
-But we can't because is_a sub relation is inferred but not parsed directly from the text.
+With semantic inference, we might define a proper subordinate relation as below.
+In this stage we cannot, because `is_a` is inferred rather than structurally parsed from the text.
 
 >> accident is_a unplanned_event;
 
-In this stage of our structural translator,  we don't have reason or intelligent inference, so we have to use the safe relator and it will have to be fixed by an intelligent agent later.
+In this stage of our structural translator, we avoid semantic inference and use the safe fallback relator.
 
 >> accident _rel unplanned_event;
 
@@ -267,7 +259,7 @@ We should aim to provide **high coverage** with as minimal a grammar as possible
 
 # Important Implementation Guidance
 
-Do **not hard‑code English lexical tokens** in translation rules.
+Do **not hard-code English lexical tokens** in translation rules.
 
 Avoid patterns like:
 
@@ -282,7 +274,7 @@ if pos == ["DET", "ADJ", "NOUN"]:
 or dependency‑based checks from the NLP parser.
 
 This keeps the translator aligned with the architectural principles in
-`AGENTS.md`, and importantly, adhere to TAGL PUT grammar rules.
+`AGENTS.md`, while adhering to TAGL PUT grammar rules.
 
 ---
 
