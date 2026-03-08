@@ -30,15 +30,45 @@ Examples:
 
 Use the terms `NLP POS` or `spaCy POS` when relevant.
 
-### TAGL grammar terms
-
-Productions, terminals, and parser terminology defined in:
-
-`../tagd/tagl/src/parser.y`
+### tagd Repository
 
 During development, the `tagd` repository is assumed to exist at:
 
 `../tagd/`
+
+
+### PUT Grammar:
+
+`../tagd/README.md` contains BNF grammars for TAGL statments
+
+```
+put_statement ::= ">>" subject_sub_relation relations
+put_statement ::= ">>" subject_sub_relation
+put_statement ::= ">>" subject relations
+
+subject_sub_relation ::= subject SUB TAG
+
+subject ::= TAG
+
+relations ::= relations predicate_list
+relations ::= predicate_list
+
+predicate_list ::= relator object_list
+
+relator ::= TAG
+
+object_list ::= object_list ',' object
+object_list ::= object
+
+object ::= TAG EQUALS QUANTIFIER
+object ::= TAG EQUALS MODIFIER
+object ::= TAG EQUALS QUOTED_STR
+object ::= TAG
+```
+
+But The actual productions, terminals, and parser terminology defined in our lemon parser:
+
+`../tagd/tagl/src/parser.y`
 
 ### tagd POS
 
