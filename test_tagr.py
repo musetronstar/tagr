@@ -12,7 +12,9 @@ import io
 import pytest
 
 import tagr
-from tagr import PosToken, Relation, TranslationError, normalize, parse_relation, rule_relation, translate
+from parser import PosToken, Relation, TranslationError, normalize, parse_relation
+from taglizer import taglize_relation
+from tagr import translate
 
 
 def test_normalize_strips_outer_whitespace() -> None:
@@ -33,7 +35,7 @@ def test_parse_relation_subordinate_shape() -> None:
         PosToken(text=".", pos="PUNCT"),
     ]
 
-    assert parse_relation(tokens) == Relation(subject="dog", relator="is_a", obj="mammal")
+    assert parse_relation(tokens) == Relation(subject="dog", relator=("is", "a"), obj="mammal")
 
 
 def test_parse_relation_predicate_shape() -> None:
@@ -45,7 +47,7 @@ def test_parse_relation_predicate_shape() -> None:
         PosToken(text=".", pos="PUNCT"),
     ]
 
-    assert parse_relation(tokens) == Relation(subject="dog", relator="can", obj="bark")
+    assert parse_relation(tokens) == Relation(subject="dog", relator=("can",), obj="bark")
 
 
 def test_parse_relation_rejects_invalid_shape() -> None:
@@ -59,9 +61,9 @@ def test_parse_relation_rejects_invalid_shape() -> None:
         parse_relation(tokens)
 
 
-def test_rule_relation_emits_tagl_statement() -> None:
+def test_taglize_relation_emits_tagl_statement() -> None:
     relation = Relation(subject="dog", relator="is_a", obj="mammal")
-    assert rule_relation(relation) == ">> dog is_a mammal;"
+    assert taglize_relation(relation) == ">> dog is_a mammal;"
 
 
 def test_translate_subordinate() -> None:

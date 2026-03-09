@@ -18,11 +18,20 @@ class PosToken:
 
 @dataclass(frozen=True)
 class Relation:
-    """Internal model for a `subject relator object` TAGL relation shape."""
+    """Internal parsed `subject relator object` relation shape."""
 
     subject: str
-    relator: str
-    obj: str
+    relator: str | tuple[str, ...]
+    obj: str | QuantifiedObject
+
+
+@dataclass(frozen=True)
+class QuantifiedObject:
+    """Parsed quantified object structure before TAGL string emission."""
+
+    quantified_obj: str
+    qty: str
+    trailing_obj: str
 
 
 _SUBJECT_POS = {"NOUN", "PROPN", "PRON"}
@@ -65,11 +74,6 @@ def pos_tag(text: str) -> list[PosToken]:
     return [PosToken(text=token.text, pos=token.pos_) for token in doc if not token.is_space]
 
 
-def _taglize(tokens: list[PosToken]) -> str:
-    """Convert relation-token text to TAGL id form (`x y` -> `x_y`)."""
-    return "_".join(token.text.lower() for token in tokens)
-
-
 def _parse_quantified_object_relation(subject: PosToken, tail_tokens: list[PosToken]) -> Relation | None:
     """Parse `subject has 4 legs and a tail`-like shape into a single relation."""
     if len(tail_tokens) < 6:
@@ -91,9 +95,13 @@ def _parse_quantified_object_relation(subject: PosToken, tail_tokens: list[PosTo
         return None
 
     return Relation(
-        subject=subject.text.lower(),
-        relator=_taglize([relator]),
-        obj=f"{quantified_obj.text.lower()} = {qty.text.lower()}, {trailing_obj.text.lower()}",
+        subject=subject.text,
+        relator=(relator.text,),
+        obj=QuantifiedObject(
+            quantified_obj=quantified_obj.text,
+            qty=qty.text,
+            trailing_obj=trailing_obj.text,
+        ),
     )
 
 
@@ -124,11 +132,11 @@ def parse_relation(tokens: list[PosToken]) -> Relation:
     if obj.pos not in _OBJECT_POS:
         raise TranslationError("Unsupported input: object must be noun-like, verb, or adjective")
 
-    relator = _taglize(relator_tokens)
+    relator = tuple(token.text for token in relator_tokens)
     if not relator:
         raise TranslationError("Unsupported input: invalid relator")
 
-    return Relation(subject=subject.text.lower(), relator=relator, obj=obj.text.lower())
+    return Relation(subject=subject.text, relator=relator, obj=obj.text)
 
 
 def _split_on_comma(tokens: list[PosToken]) -> list[list[PosToken]]:

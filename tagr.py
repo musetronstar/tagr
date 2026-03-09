@@ -15,14 +15,12 @@ from typing import Callable
 
 from parser import (
     PosToken,
-    Relation,
     TranslationError,
     normalize,
-    parse_relation,
     parse_relations,
     pos_tag,
 )
-from taglizer import rule_relation, rule_relations
+from taglizer import taglize_relations
 
 
 def translate(
@@ -41,13 +39,13 @@ def translate(
     tagger = alt_tagger or pos_tag
     tokens = tagger(text)
     relations = parse_relations(tokens)
-    return rule_relations(relations)
+    return taglize_relations(relations)
 
 
 def main() -> int:
     """
     Read natural language from STDIN, normalize, translate,
-    and write TAGL to to STDOUT.
+    and write TAGL to STDOUT.
 
     Returns:
         Process exit status code.
