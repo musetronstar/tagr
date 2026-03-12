@@ -191,6 +191,7 @@ Rules:
 - prefer minimal, reviewable diffs
 - prefer modifying existing code before introducing new abstractions
 - avoid broad speculative refactors unless they clearly support the requested change
+- maintain corpus-backed regression tests alongside unit tests as coverage grows; see `docs/corpus-test-strategy.md`
 
 Exploration documents under `docs/` (for example, `docs/voa-starter-grammar.md`) are non-normative.
 `AGENTS.md` plus repository tests define current required behavior.
