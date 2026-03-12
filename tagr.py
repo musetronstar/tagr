@@ -10,6 +10,7 @@ grammar patterns into TAGL, and write TAGL to STDOUT.
 
 from __future__ import annotations
 
+import argparse
 from dataclasses import dataclass
 from functools import lru_cache
 import sys
@@ -35,6 +36,16 @@ class Relation:
     subject: str
     relator: str
     obj: str
+
+
+@dataclass(frozen=True)
+class HintMatch:
+    """Matched hint span in the token stream."""
+
+    tagd_pos: str
+    value: str
+    start: int
+    end: int
 
 
 _SUBJECT_POS = {"NOUN", "PROPN", "PRON"}
@@ -82,6 +93,55 @@ def _taglize(tokens: list[PosToken]) -> str:
     return "_".join(token.text.lower() for token in tokens)
 
 
+def parse_hint_args(raw_hints: list[str]) -> dict[str, list[str]]:
+    """Parse repeated `--hint <tagd_pos>=<value>` arguments."""
+    parsed: dict[str, list[str]] = {}
+
+    for raw_hint in raw_hints:
+        tagd_pos, separator, value = raw_hint.partition("=")
+        if separator != "=" or not tagd_pos.strip() or not value.strip():
+            raise TranslationError("Invalid --hint: expected <tagd_pos>=<value>")
+        parsed.setdefault(tagd_pos.strip(), []).append(value.strip())
+
+    return parsed
+
+
+def _hint_value_tokens(value: str) -> list[str]:
+    """Normalize a hint value into lowercase token text."""
+    return value.lower().split()
+
+
+def _match_hint(tokens: list[PosToken], tagd_pos: str, value: str) -> HintMatch:
+    """Find a contiguous token span matching a hint value."""
+    target = _hint_value_tokens(value)
+    token_texts = [token.text.lower() for token in tokens]
+
+    if not target:
+        raise TranslationError("Invalid --hint: value must not be empty")
+
+    for start in range(0, len(token_texts) - len(target) + 1):
+        if token_texts[start : start + len(target)] == target:
+            return HintMatch(tagd_pos=tagd_pos, value=value, start=start, end=start + len(target))
+
+    raise TranslationError(f"Hint value not found in input: {value}")
+
+
+def match_hints(tokens: list[PosToken], hints: dict[str, list[str]] | None) -> dict[str, list[HintMatch]]:
+    """Match all provided hints against the input token stream."""
+    if not hints:
+        return {}
+
+    matched: dict[str, list[HintMatch]] = {}
+    for tagd_pos, values in hints.items():
+        matched[tagd_pos] = [_match_hint(tokens, tagd_pos, value) for value in values]
+    return matched
+
+
+def _remove_hint_span(tokens: list[PosToken], hint_match: HintMatch) -> list[PosToken]:
+    """Return tokens with the matched hint span removed."""
+    return tokens[: hint_match.start] + tokens[hint_match.end :]
+
+
 def _parse_quantified_object_relation(subject: PosToken, tail_tokens: list[PosToken]) -> Relation | None:
     """Parse `subject has 4 legs and a tail`-like shape into a single relation."""
     if len(tail_tokens) < 6:
@@ -109,12 +169,28 @@ def _parse_quantified_object_relation(subject: PosToken, tail_tokens: list[PosTo
     )
 
 
-def parse_relation(tokens: list[PosToken]) -> Relation:
+def parse_relation(tokens: list[PosToken], forced_subject: str | None = None) -> Relation:
     """Parse POS-tagged text into a `subject relator object` relation shape."""
     lexical_tokens = [token for token in tokens if token.pos != "PUNCT"]
 
     if lexical_tokens and lexical_tokens[0].pos == "DET":
         lexical_tokens = lexical_tokens[1:]
+
+    if forced_subject is not None:
+        if not lexical_tokens:
+            raise TranslationError("Unsupported input: missing relation after hinted subject")
+
+        fallback_object = _taglize(lexical_tokens)
+        if not fallback_object:
+            raise TranslationError("Unsupported input: invalid gloss fragment")
+
+        if len(lexical_tokens) >= 2 and lexical_tokens[-1].pos in _OBJECT_POS:
+            relator_tokens = lexical_tokens[:-1]
+            relator = _taglize(relator_tokens)
+            if relator:
+                return Relation(subject=forced_subject, relator=relator, obj=lexical_tokens[-1].text.lower())
+
+        return Relation(subject=forced_subject, relator="_rel", obj=fallback_object)
 
     if len(lexical_tokens) < 3:
         raise TranslationError("Unsupported input: expected at least subject, relator, and object")
@@ -279,7 +355,9 @@ def parse_relations(tokens: list[PosToken]) -> list[Relation]:
 
 
 def translate(
-    text: str, alt_tagger: Callable[[str], list[PosToken]] | None = None
+    text: str,
+    hints: dict[str, list[str]] | None = None,
+    alt_tagger: Callable[[str], list[PosToken]] | None = None,
 ) -> str:
     """
     Translate normalized English text into TAGL.
@@ -293,6 +371,17 @@ def translate(
     """
     tagger = alt_tagger or pos_tag
     tokens = tagger(text)
+
+    matched_hints = match_hints(tokens, hints)
+    subject_hints = matched_hints.get("subject", [])
+    if len(subject_hints) > 1:
+        raise TranslationError("Unsupported input: only one subject hint is currently supported")
+    if subject_hints:
+        subject_hint = subject_hints[0]
+        subject = "_".join(_hint_value_tokens(subject_hint.value))
+        gloss_tokens = _remove_hint_span(tokens, subject_hint)
+        return rule_relation(parse_relation(gloss_tokens, forced_subject=subject))
+
     relations = parse_relations(tokens)
     return rule_relations(relations)
 
@@ -305,6 +394,16 @@ def main() -> int:
     Returns:
         Process exit status code.
     """
+    parser = argparse.ArgumentParser(prog="tagr", add_help=True)
+    parser.add_argument(
+        "--hint",
+        action="append",
+        default=[],
+        metavar="<tagd_pos>=<value>",
+        help="Constrain translation with a text-grounded tagd POS hint.",
+    )
+    args = parser.parse_args()
+
     raw_text = sys.stdin.read()
 
     if not raw_text.strip():
@@ -313,7 +412,7 @@ def main() -> int:
     normalized = normalize(raw_text)
 
     try:
-        output = translate(normalized)
+        output = translate(normalized, hints=parse_hint_args(args.hint))
     except TranslationError as exc:
         sys.stderr.write(f"Translation error: {exc}\n")
         return 1

@@ -12,7 +12,16 @@ import io
 import pytest
 
 import tagr
-from tagr import PosToken, Relation, TranslationError, normalize, parse_relation, rule_relation, translate
+from tagr import (
+    PosToken,
+    Relation,
+    TranslationError,
+    normalize,
+    parse_hint_args,
+    parse_relation,
+    rule_relation,
+    translate,
+)
 
 
 def test_normalize_strips_outer_whitespace() -> None:
@@ -164,10 +173,49 @@ def test_translate_subordinate_with_predicate_and_modifier_quantifier() -> None:
     )
 
 
+def test_parse_hint_args_collects_repeated_hints() -> None:
+    assert parse_hint_args(["subject=age", "object=person", "object=thing"]) == {
+        "subject": ["age"],
+        "object": ["person", "thing"],
+    }
+
+
+def test_translate_uses_hinted_subject_for_gloss_fragment() -> None:
+    fake_tokens = [
+        PosToken(text="against", pos="ADP"),
+        PosToken(text="opposed", pos="ADJ"),
+        PosToken(text="to", pos="ADP"),
+    ]
+
+    assert (
+        translate(
+            "against opposed to",
+            hints={"subject": ["against"]},
+            alt_tagger=lambda _text: fake_tokens,
+        )
+        == ">> against _rel opposed_to;"
+    )
+
+
+def test_translate_errors_when_hint_value_not_present_in_input() -> None:
+    fake_tokens = [
+        PosToken(text="opposed", pos="ADJ"),
+        PosToken(text="to", pos="ADP"),
+    ]
+
+    with pytest.raises(TranslationError, match="Hint value not found"):
+        translate(
+            "opposed to",
+            hints={"subject": ["against"]},
+            alt_tagger=lambda _text: fake_tokens,
+        )
+
+
 def test_main_writes_translated_output_with_newline(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("sys.stdin", io.StringIO("A dog can bark."))
     out = io.StringIO()
     monkeypatch.setattr("sys.stdout", out)
+    monkeypatch.setattr("sys.argv", ["tagr.py"])
     monkeypatch.setattr(
         tagr,
         "pos_tag",
@@ -188,6 +236,7 @@ def test_main_reports_errors_to_stderr_and_nonzero_exit(monkeypatch: pytest.Monk
     monkeypatch.setattr("sys.stdout", io.StringIO())
     err = io.StringIO()
     monkeypatch.setattr("sys.stderr", err)
+    monkeypatch.setattr("sys.argv", ["tagr.py"])
     monkeypatch.setattr(
         tagr,
         "pos_tag",
@@ -200,3 +249,23 @@ def test_main_reports_errors_to_stderr_and_nonzero_exit(monkeypatch: pytest.Monk
 
     assert tagr.main() == 1
     assert "unsupported input" in err.getvalue().lower()
+
+
+def test_main_accepts_subject_hint(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("sys.stdin", io.StringIO("against opposed to"))
+    out = io.StringIO()
+    monkeypatch.setattr("sys.stdout", out)
+    monkeypatch.setattr("sys.stderr", io.StringIO())
+    monkeypatch.setattr("sys.argv", ["tagr.py", "--hint", "subject=against"])
+    monkeypatch.setattr(
+        tagr,
+        "pos_tag",
+        lambda _text: [
+            PosToken(text="against", pos="ADP"),
+            PosToken(text="opposed", pos="ADJ"),
+            PosToken(text="to", pos="ADP"),
+        ],
+    )
+
+    assert tagr.main() == 0
+    assert out.getvalue() == ">> against _rel opposed_to;\n"
