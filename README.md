@@ -17,6 +17,22 @@ echo "tagd is a semantic-relational engine" | tagr
 >> tagd is_a semantic_relational_engine;
 ```
 
+### tagd POS hints
+
+`tagr` also accepts:
+
+```text
+--hint <tagd_pos>=<value>
+```
+
+Hints constrain translation using tagd POS roles such as
+`subject`, `sub_relator`, `relator`, `object`, etc.
+The tagd POS hint should use the same name defined in the `../tagd/tagl/src/parser.y` TAGL grammer
+
+Each hint value must be present in the input text. The hint does not inject
+new text into the input stream; it helps `tagr` identify and group structure
+that is already present.
+
 ## Examples
 
 ### Subordinate relation
@@ -90,4 +106,10 @@ Output:
 >> dog is_a mammal
 can bark
 has legs = 4, tail;
+```
+
+Constrains "age" to the tagd POS `<subject>`.
+
+```bash
+echo "age how old a person or thing is" | tagr --hint subject=age
 ```
