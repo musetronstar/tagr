@@ -1,0 +1,8 @@
+# build targets
+bin/*
+.o
+
+# hidden files
+.*
+!.gitignore
+
