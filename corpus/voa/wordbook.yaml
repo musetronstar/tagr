@@ -1,0 +1,128 @@
+# tagr/corpus/voa/core.yaml
+# Real VOA Wordbook entries — structural translation targets
+# Use --hint subject=WORD for all cases (glosses rarely contain own subject)
+
+- input: "age how old a person or thing is"
+  hints: ["subject=age"]
+  expected: ">> age _rel how_old person, thing;"
+  notes: "basic how-old gloss"
+
+- input: "able having the power to do something"
+  hints: ["subject=able"]
+  expected: ">> able having power to_do something;"
+  notes: "having + infinitive"
+
+- input: "accept to agree to receive"
+  hints: ["subject=accept"]
+  expected: ">> accept to agree, receive;"
+  notes: "double to-infinitive → object list"
+
+- input: "accident an unplanned event"
+  hints: ["subject=accident"]
+  expected: ">> accident _rel unplanned_event;"
+  notes: "noun paraphrase"
+
+- input: "activist one who seeks change through action"
+  hints: ["subject=activist"]
+  expected: ">> activist _rel one seeks change through action;"
+  notes: "one who …"
+
+- input: "actor someone acting in a play or show"
+  hints: ["subject=actor"]
+  expected: ">> actor _rel someone acting play, show;"
+  notes: "someone + coordination"
+
+- input: "adult a grown person"
+  hints: ["subject=adult"]
+  expected: ">> adult _rel grown_person;"
+  notes: "minimal adult synonym"
+
+- input: "agree to say yes"
+  hints: ["subject=agree"]
+  expected: ">> agree to say yes;"
+  notes: "short infinitive"
+
+- input: "airplane a vehicle that flies in the air"
+  hints: ["subject=airplane"]
+  expected: ">> airplane _rel vehicle flies_in air;"
+  notes: "noun + relative fragment"
+
+- input: "animal a living thing that can move"
+  hints: ["subject=animal"]
+  expected: ">> animal _rel living_thing can move;"
+  notes: "basic living definition"
+
+- input: "bank a place where money is kept"
+  hints: ["subject=bank"]
+  expected: ">> bank _rel place money kept;"
+  notes: "location + passive"
+
+- input: "beautiful very nice to look at"
+  hints: ["subject=beautiful"]
+  expected: ">> beautiful _rel very_nice look_at;"
+  notes: "adjective + infinitive"
+
+- input: "bird an animal with wings that flies"
+  hints: ["subject=bird"]
+  expected: ">> bird _rel animal wings flies;"
+  notes: "noun + modifiers + verb"
+
+- input: "boy a young male person"
+  hints: ["subject=boy"]
+  expected: ">> boy _rel young_male person;"
+  notes: "age + gender"
+
+- input: "city a large town"
+  hints: ["subject=city"]
+  expected: ">> city _rel large_town;"
+  notes: "size synonym"
+
+- input: "country land with its own government"
+  hints: ["subject=country"]
+  expected: ">> country _rel land own_government;"
+  notes: "possession fragment"
+
+- input: "danger something that can hurt you"
+  hints: ["subject=danger"]
+  expected: ">> danger _rel something can_hurt you;"
+  notes: "potential harm"
+
+- input: "doctor a person who helps sick people"
+  hints: ["subject=doctor"]
+  expected: ">> doctor _rel person helps sick_people;"
+  notes: "who + verb"
+
+- input: "family a group of people related by blood or marriage"
+  hints: ["subject=family"]
+  expected: ">> family _rel group people related blood, marriage;"
+  notes: "coordination in object list"
+
+- input: "food things that people eat"
+  hints: ["subject=food"]
+  expected: ">> food _rel things people eat;"
+  notes: "simple plural"
+
+- input: "government the people who control a country"
+  hints: ["subject=government"]
+  expected: ">> government _rel people control country;"
+  notes: "who + verb"
+
+- input: "happy feeling pleasure"
+  hints: ["subject=happy"]
+  expected: ">> happy _rel feeling pleasure;"
+  notes: "emotion state"
+
+- input: "help to make something easier"
+  hints: ["subject=help"]
+  expected: ">> help to make something easier;"
+  notes: "to + infinitive"
+
+- input: "home the place where a person lives"
+  hints: ["subject=home"]
+  expected: ">> home _rel place person lives;"
+  notes: "location + verb"
+
+- input: "hospital a place where sick people get treatment"
+  hints: ["subject=hospital"]
+  expected: ">> hospital _rel place sick_people treatment;"
+  notes: "passive-like fragment"
