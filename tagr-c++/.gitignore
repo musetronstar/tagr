@@ -1,3 +1,5 @@
 # build targets
 .o
 tagr
+tests/tester
+tests/tester.cpp

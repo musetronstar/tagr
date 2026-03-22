@@ -1,4 +1,5 @@
 #include <iostream>
+#include <cctype>
 #include <cerrno>
 #include <fstream>
 #include <stdexcept>   // logic_error, invalid_argument, runtime_error exceptions
@@ -12,17 +13,13 @@
 #include "tagl.h"
 #include "tagd/codes.h"
 #include "tagsh.h"
+#include "tagr.h"
 
 /*\
-|*| Parses an input file and print an ngram frequency table
-|*| 	in the form: ngram <tab> freqency
+|*| Reads an input stream from STDIN and outputs TAGL
 |*|
-|*| ngrams are stored in a trie
+|*| tokens are stored in a trie
 \*/
-
-// TODO
-// add frequency counts to trie
-// add a contained_in vector of ngram pointers where this ngram is a member
 
 // returns true if file exists and optionally sets a filesize pointer
 bool file_exists(const char *fname, size_t *sz=nullptr) {
@@ -71,25 +68,29 @@ struct mmap_t {
 };
 
 // value stored at a terminal trie node
-// freq now - later: tagd_pos, NLP part-of-speech, etc.
 struct trie_value {
-	size_t freq;  // number of times this token was seen in the input
+	size_t freq;  // freq now, TODO later: <position of match in input>, <tagd_pos>, <NLP part-of-speech>, etc.
 	trie_value() : freq{0} {}
 };
 
 // forward declare because nodes refer to nodes
 struct node;
 
-// represents a trie node for the allowed bases at a position in the sequence
+// represents a trie node for a token at a position in the input byte stream 
 struct node {
 	// array of node pointers, indexed by byte value
-	// TODO change to a std::string of bytes of an ngram
 	node* data[256];
 
-	// terminal node marks the end of a target
-	// since this assignment does not deal with target sequences that are prefixes of other sequences,
-	// the trie could have been implemented without this flag by checking a node for empty data array.
-	// However, this flag gives a significant runtime performance boost.
+	/*
+	 * TODO
+	 * the terminal node marks the end of a token
+	 * since this prototype has not yet dealt with tokens that are contained in other tokens as their prefix
+	 *
+	 * TODO: report is this true?
+	 * the trie could have been implemented without this flag by checking a node for empty data array.
+	 * However, this flag gives a significant runtime performance boost.
+	 *
+	 */
 	bool term;
 
 	// remove term use n == 0 for empty node
@@ -107,8 +108,7 @@ struct node {
 	// delete all allocated nodes cascading downwards
 	~node() {
 		for (int i=0; i<256; i++) {
-			if (data[i])
-				delete data[i];
+			if (data[i]) delete data[i];
 		}
 	}
 };
@@ -119,7 +119,7 @@ struct trie {
 
 	trie() = delete;  // no default constructor
 
-	// construct trie given filename of sequences
+	// construct trie given filename of bytes
 	// throws invalid_argument exception for errors caused by filename argument, otherwise runtime_error
 	trie(char *fname) : root() {
 		if (!file_exists(fname))
@@ -129,17 +129,18 @@ struct trie {
 		if (!ifs.is_open())
 			throw std::runtime_error(std::string("failed to open file: ").append(fname));
 
-		// get sequences from targets file and add to the trie
-		// TODO tokensize the input and adding each ngram from 1 to n for each token of input
-		for (std::string seq; std::getline(ifs, seq); this->add(seq));
+		// TODO <POS lookups> is this where to do POS lookups?
+
+		// get bytes from file or STDIN, then scan/lookup token positions in the trie
+		for (std::string tok; std::getline(ifs, tok); this->add(tok));
 	}
 
-	// add a node for each byte in the given sequence
-	// the end of the string will be represented by an empty node and a terminal flag
-	void add(const std::string& seq) {
+	// add a node for each byte in the given token
+	// the end of the token will be represented by an empty node and a terminal flag
+	void add(const std::string& tok) {
 		// current node being added to
 		node *cur = &root;
-		for (char c : seq) {
+		for (char c : tok) {
 			auto b = (unsigned char)c;
 
 			if (!cur->data[b]) // not exists, so create
@@ -148,23 +149,25 @@ struct trie {
 			// point to next node down the trie
 			cur = cur->data[b];
 		}
-		cur->term = true;  // mark end of the sequence with a term flag
+		cur->term = true;  // mark end of the token with a term flag
 	}
 
-	// prints the trie in same format as the input targets file - ASCII text, on sequence per line
-	void print_targets(TAGL::driver *drv = nullptr) const {
-		// recursive function that traverses the trie
-		// note the sequence prefix of each node is passed by copy (no reference)
-		// this might be expensive, but I didn't see an easy way around it
+	// TODO prints to the trie to the output stream (defalut STDOUT).
+	// the output bytes should match exactly the normalized input stream bytes (TODO: normalize input bytes)
+	void print_trie(TAGL::driver *drv = nullptr) const {
+		/* function recursively traverses the trie
+		   note the token prefix of each node is passed by copy (no reference)
+		   this might be expensive, but I didn't see an easy way around it */
 		std::function<void(const node*, std::string, char)> f_traverse;
 
-		// traverse the trie, recursively passing the current sequence prefix plus the next
-		// char to append until a terminal node is encountered
+		/* traverse the trie, recursively passing the current token prefix plus the next
+		   char to append until a terminal node is encountered */
 		f_traverse = [&f_traverse, drv](const node* nd, std::string s, char c) {
 			if (c) s.push_back(c);
 			if (nd->term) {
+				// TODO printing of token matches shoulud be near where a trie node is added or modified
 				if (drv) {
-					// TODO why is this code not being executed?
+					// TODO only print if (_opt_print_events)
 					auto tpos_str = TAGL::token_str(drv->lookup_pos(s));
 					std::cout << s << "\t" << tpos_str << std::endl;
 				} else {
@@ -183,16 +186,16 @@ struct trie {
 	}
 
 	// called when a match occurs
-	// parameters: <source filename>, <offset>, <matched sequence>
+	// parameters: <source filename>, <offset>, <matched token>
 	typedef std::function<void(const std::string&, size_t, const std::string&)> match_function_t;
 
-	// searches the mapped data for sequence targets and calls the match function for each match
+	// searches the mapped data for token targets and calls the match function for each match
 	void matches(const mmap_t& mapped, const match_function_t& f_match) const {
-		// for each byte in mapped source chromosome file
+		// for each byte in mapped data
 		for (size_t i=0; i<mapped.size; i++) {
 			// a match starts by comparing the root node of the trie and traversing downwards
 			const node *cur = &root;
-			// for each byte in mapped source chromosome file,
+			// for each byte in mapped data
 			// match a node until a terminal node is encountered
 			for (size_t j=i; j<mapped.size; j++) {
 				auto b = (unsigned char)mapped.data[j];
@@ -204,7 +207,7 @@ struct trie {
 
 				// terminal node, we have a match
 				if (cur->data[b]->term) {
-					// call the match function, passing the filename, offset, and sequence
+					// call the match function, passing the filename, offset, and token
 					f_match(
 						mapped.fname,
 						i,
@@ -221,10 +224,11 @@ struct trie {
 };
 
 
-// interates over each byte of the mapped data and outputs ngram sequences
+// interates over each byte of the mapped data and outputs ngram tokens
 void ngrams(const mmap_t& mapped) {
-	// for each byte in mapped source chromosome file
+	// for each byte in mapped data
 	for (size_t i=0; i<mapped.size; i++) {
+		// TODO WTF is 81 for?
 		for (size_t j=i; (j-i)<81 && j<mapped.size; j++) {
 			std::cout << std::string(&mapped.data[i], (j - i + 1));
 		}
@@ -236,6 +240,14 @@ void ngrams(const mmap_t& mapped) {
 class tagr_args : public cmd_args {
 	public:
 		std::vector<std::string> scan_fnames;
+		bool opt_print_events = false;
+
+		tagr_args() : cmd_args() {
+			_cmds["--print-events"] = {
+				[this](char *) { opt_print_events = true; },
+				false
+			};
+		}
 
 		void parse(int argc, char **argv) {
 			// pre-filter argv: pull out positional (non-flag) args as scan_fnames,
@@ -260,8 +272,15 @@ class tagr_args : public cmd_args {
 
 // tagr - inherits tagsh for tagdb/driver/session setup
 class tagr : public tagsh {
+		tagr_tokenizer _tokenizer;
+		bool _opt_print_events;
+
 	public:
-		tagr(tagdb_type *tdb) : tagsh(tdb) {}
+		tagr(tagdb_type *tdb, bool opt_print_events = false) :
+			tagsh(tdb),
+			_tokenizer(&_driver, std::cerr),
+			_opt_print_events{opt_print_events}
+		{}
 
 		tagd::code scan_fd(int fd) {
 			struct evbuffer *input = evbuffer_new();
@@ -280,7 +299,12 @@ class tagr : public tagsh {
 				return tagd::TAGD_ERR;
 			}
 
-			auto rc = _driver.execute(input);
+			// Tokenize the buffered bytes and log the emitted token stream.
+			size_t len = evbuffer_get_length(input);
+			const unsigned char *data = evbuffer_pullup(input, len);
+			_tokenizer.scan(data, len);
+
+			auto rc = tagd::TAGD_OK;
 			evbuffer_free(input);
 			return rc;
 		}
@@ -317,9 +341,8 @@ int main(int argc, char **argv) {
 		return tdb.code();
 	}
 
-	tagr t(&tdb);
+	tagr t(&tdb, args.opt_print_events);
 
-	// load tagspace first without TAGL trace noise from the bootstrap file(s)
 	bool opt_trace = args.opt_trace;
 	args.opt_trace = false;
 	if (args.interpret(t) != 0)

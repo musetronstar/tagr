@@ -1,0 +1,47 @@
+#!/usr/bin/expect
+
+set TAGR "../bin/tagr"
+set BOOTSTRAP "./bootstrap.tagl"
+
+set MAX_ERRORS 3
+set ERRORS 0
+set timeout 5
+set log_user 1
+
+proc test {n cmd e} {
+	upvar 1 ERRORS errors
+	upvar 1 MAX_ERRORS max_errors
+
+	set match 0
+
+	spawn -noecho sh -c $cmd
+	expect {
+		-regexp $e  {
+			puts "\n##########   $n passed   ##########\n"
+			set match 1
+		}
+	}
+
+	expect eof
+	wait
+
+	if {$match} { return }
+
+	puts "\n!!!!!!!!!!   $n failed   !!!!!!!!!!\n"
+	incr errors
+
+	if {$errors >= $max_errors} {
+		puts "$errors errors. Exiting..."
+		exit $errors
+	}
+}
+
+test "emit_tokens" \
+	"printf 'one any of\n' | $TAGR --file $BOOTSTRAP -n 2>&1" \
+	{one[[:space:]]+TOK_TAG\r?\nany[[:space:]]+TOK_TAG\r?\nof[[:space:]]+TOK_SUB_RELATOR}
+
+if {$ERRORS} {
+	exit $ERRORS
+}
+
+puts "\nAll expect tests passed.\n"

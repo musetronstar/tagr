@@ -26,7 +26,7 @@ TODO:
   + Outputs valid TAGL statements
 
 ### OUTPUT: STDERR
-  See how the `../tagd/` project outputs TAGL errors.
+  See how the `tagd/` project outputs TAGL errors.
   + output valid `tagd:error` TAGL statements
   + see the TCL `expect` tests to see the errors as TAGL that tagd outputs
 

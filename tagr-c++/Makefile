@@ -1,14 +1,18 @@
-PRG_DIR = $(HOME)/projects/
-TAGD_DIR = $(PRG_DIR)/tagd/tagd
-TAGL_DIR = $(PRG_DIR)/tagd/tagl
-TAGDB_DIR = $(PRG_DIR)/tagd/tagdb
-TAGSH_DIR = $(PRG_DIR)/tagd/tagsh
+TAGR_BIN=bin/tagr
 
-INC = -I$(TAGD_DIR)/include -I$(TAGL_DIR)/include -I$(TAGDB_DIR)/include -I$(TAGDB_DIR)/sqlite/include -I$(TAGSH_DIR)/include
-LFLAGS = -L$(TAGSH_DIR)/lib -ltagsh -L$(TAGDB_DIR)/lib -ltagdb-sqlite -L$(TAGL_DIR)/lib -ltagl -L$(TAGD_DIR)/lib -ltagd -lsqlite3 -lreadline -levent
+.PHONY: src data tests clean
 
-all:
-	g++ -O3 -std=c++23 -W -o tagr tagr.cc $(INC) $(LFLAGS)
+all: src data
+
+src:
+	make -C src all
+
+data:
+	bin/simple-english-rev-freq.sh > data/simple-english-rev-freq.txt
+
+tests: src
+	make -C tests tests
 
 clean:
-	rm tagr
+	rm -f $(TAGR_BIN)
+	make -C tests clean
