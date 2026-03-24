@@ -1,4 +1,5 @@
-      3 of	TOK_SUB_RELATOR
+      3 is	TOK_TAG
+      2 one	TOK_TAG
       2 any	TOK_TAG
       1 r@nd0m	TOK_UNKNOWN
-      1 one	TOK_TAG
+      1 of	TOK_SUB_RELATOR
