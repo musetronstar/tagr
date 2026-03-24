@@ -156,18 +156,21 @@ struct trie {
 
 	// TODO prints to the trie to the output stream (defalut STDOUT).
 	// the output bytes should match exactly the normalized input stream bytes (TODO: normalize input bytes)
-	void print_trie(std::ostream& out, TAGL::driver *drv = nullptr) const {
-		/* Collect all terminal nodes, then emit in input-stream order (by first offset).
-		   Traversal does not stop at terminal nodes so that tokens which are prefixes
-		   of longer tokens are not shadowed (e.g. "any" does not block "anything"). */
-		struct entry_t { std::string tok; const trie_value *val; };
-		std::vector<entry_t> entries;
+	void print_trie(std::ostream& out) const {
+		/* Expand each terminal into one (offset, token) pair per occurrence,
+		   sort by stream offset, then emit as normalized input stream bytes.
+		   Traversal does not stop at terminal nodes so that tokens which are
+		   prefixes of longer tokens are not shadowed. */
+		struct token_at { size_t offset; std::string tok; };
+		std::vector<token_at> stream;
 
 		std::function<void(const node*, std::string, char)> f_traverse;
-		f_traverse = [&f_traverse, &entries](const node* nd, std::string s, char c) {
+		f_traverse = [&f_traverse, &stream](const node* nd, std::string s, char c) {
 			if (c) s.push_back(c);
-			if (nd->term)
-				entries.push_back({s, &nd->val});
+			if (nd->term) {
+				for (size_t i = 0; i < nd->val.offset_count; ++i)
+					stream.push_back({nd->val.offsets[i], s});
+			}
 			for (int i = 0; i < 256; i++) {
 				if (nd->data[i])
 					f_traverse(nd->data[i], s, (char)i);
@@ -175,20 +178,15 @@ struct trie {
 		};
 		f_traverse(&root, std::string(), '\0');
 
-		std::sort(entries.begin(), entries.end(), [](const entry_t& a, const entry_t& b) {
-			return a.val->offsets[0] < b.val->offsets[0];
+		std::sort(stream.begin(), stream.end(), [](const token_at& a, const token_at& b) {
+			return a.offset < b.offset;
 		});
 
-		for (const auto& e : entries) {
-			out << e.tok;
-			for (size_t i = 0; i < e.val->offset_count; ++i)
-				out << (i == 0 ? "\t" : " ") << e.val->offsets[i];
-			if (drv) {
-				auto tpos_str = TAGL::token_str(drv->lookup_pos(e.tok));
-				out << "\t" << tpos_str;
-			}
-			out << '\n';
+		for (size_t i = 0; i < stream.size(); ++i) {
+			if (i > 0) out << ' ';
+			out << stream[i].tok;
 		}
+		out << '\n';
 	}
 
 	// called when a match occurs
@@ -231,7 +229,7 @@ struct trie {
 
 void tagr_tokenizer::print_trie(std::ostream& out) const {
 	if (_trie)
-		_trie->print_trie(out, _driver);
+		_trie->print_trie(out);
 }
 
 tagr_tokenizer::~tagr_tokenizer() = default;
