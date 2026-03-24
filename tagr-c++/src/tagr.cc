@@ -155,19 +155,21 @@ struct trie {
 
 	// TODO prints to the trie to the output stream (defalut STDOUT).
 	// the output bytes should match exactly the normalized input stream bytes (TODO: normalize input bytes)
-	void print_trie(std::ostream& out, TAGL::driver *drv = nullptr) const {
-		struct entry {
+	void print_trie(std::ostream& out) const {
+		struct occurrence {
+			size_t offset;
 			std::string tok;
-			const trie_value *val;
 		};
 
-		std::vector<entry> entries;
+		std::vector<occurrence> occs;
 		std::function<void(const node*, std::string, char)> f_traverse;
 
-		f_traverse = [&f_traverse, &entries](const node* nd, std::string s, char c) {
+		f_traverse = [&f_traverse, &occs](const node* nd, std::string s, char c) {
 			if (c) s.push_back(c);
-			if (nd->term)
-				entries.push_back({s, &nd->val});
+			if (nd->term) {
+				for (size_t i = 0; i < nd->val.offset_count; ++i)
+					occs.push_back({nd->val.offsets[i], s});
+			}
 
 			for (int i=0; i<256; i++) {
 				if (nd->data[i])
@@ -177,24 +179,16 @@ struct trie {
 
 		f_traverse(&root, std::string(), '\0');
 
-		std::stable_sort(entries.begin(), entries.end(),
-			[](const entry& a, const entry& b) {
-				size_t a0 = a.val->offset_count ? a.val->offsets[0] : 0;
-				size_t b0 = b.val->offset_count ? b.val->offsets[0] : 0;
-				return a0 < b0;
+		std::stable_sort(occs.begin(), occs.end(),
+			[](const occurrence& a, const occurrence& b) {
+				return a.offset < b.offset;
 			});
 
-		for (const auto& e : entries) {
-			out << e.tok;
-			for (size_t i = 0; i < e.val->offset_count; ++i)
-				out << (i == 0 ? "\t" : " ") << e.val->offsets[i];
+		for (size_t i = 0; i < occs.size(); ++i)
+			out << (i == 0 ? "" : " ") << occs[i].tok;
 
-			if (drv) {
-				auto tpos_str = TAGL::token_str(drv->lookup_pos(e.tok));
-				out << "\t" << tpos_str;
-			}
+		if (!occs.empty())
 			out << '\n';
-		}
 	}
 
 	// called when a match occurs
@@ -237,7 +231,7 @@ struct trie {
 
 void tagr_tokenizer::print_trie(std::ostream& out) const {
 	if (_trie)
-		_trie->print_trie(out, _driver);
+		_trie->print_trie(out);
 }
 
 tagr_tokenizer::~tagr_tokenizer() = default;
