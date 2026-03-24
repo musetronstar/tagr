@@ -74,12 +74,22 @@ class Tester : public CxxTest::TestSuite {
 	tagdb_tester *_tdb;
 	TAGL::driver *_driver;
 
-	std::string scan(const std::string& input) {
-		std::ostringstream out;
-		tagr_tokenizer tok(_driver, out);
-		tok.scan((const unsigned char *) input.data(), input.size());
-		return out.str();
-	}
+		std::string scan(const std::string& input) {
+			std::ostringstream out;
+			tagr_tokenizer tok(_driver, out);
+			tok.scan((const unsigned char *) input.data(), input.size());
+			return out.str();
+		}
+
+		std::string scan_and_print_trie(const std::string& input) {
+			std::ostringstream out;
+			tagr_tokenizer tok(_driver, out);
+			tok.scan((const unsigned char *) input.data(), input.size());
+
+			std::ostringstream trie_out;
+			tok.print_trie(trie_out);
+			return trie_out.str();
+		}
 
 	public:
 		void setUp() {
@@ -103,6 +113,28 @@ class Tester : public CxxTest::TestSuite {
 				"one\tTOK_TAG\n"
 				"any\tTOK_TAG\n"
 				"of\tTOK_SUB_RELATOR\n"
+			);
+		}
+
+		void test_trie_value_stores_offsets() {
+			trie_value v;
+
+			v.add_offset(0);
+			v.add_offset(4);
+			v.add_offset(8);
+
+			TS_ASSERT_EQUALS(v.offset_count, 3U);
+			TS_ASSERT_EQUALS(v.offsets[0], 0U);
+			TS_ASSERT_EQUALS(v.offsets[1], 4U);
+			TS_ASSERT_EQUALS(v.offsets[2], 8U);
+		}
+
+		void test_print_trie_shows_repeated_token_offsets() {
+			TS_ASSERT_EQUALS(
+				scan_and_print_trie("one any any of\n"),
+				"any\t4 8\tTOK_TAG\n"
+				"of\t12\tTOK_SUB_RELATOR\n"
+				"one\t0\tTOK_TAG\n"
 			);
 		}
 };

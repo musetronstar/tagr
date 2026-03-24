@@ -1,25 +1,35 @@
-#include <iostream>
 #include <cctype>
 #include <cerrno>
+#include <cstring>
 #include <fstream>
-#include <stdexcept>   // logic_error, invalid_argument, runtime_error exceptions
-#include <cstring>     // basename
-#include <fcntl.h>     // open
-#include <unistd.h>    // close
-#include <sys/stat.h>  // stat
-#include <sys/mman.h>  // mmap, munmap
-#include <functional>  // std::function
+#include <functional>
+#include <iostream>
+#include <stdexcept>
+
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
 #include <event2/buffer.h>
-#include "tagl.h"
-#include "tagd/codes.h"
-#include "tagsh.h"
+
 #include "tagr.h"
 
-/*\
-|*| Reads an input stream from STDIN and outputs TAGL
-|*|
-|*| tokens are stored in a trie
-\*/
+trie_value::trie_value() :
+	offset_count{0},
+	offsets{}
+{}
+
+void trie_value::add_offset(size_t offset) {
+	if (offset_count < MAX_TOKEN_POSITIONS)
+		offsets[offset_count++] = offset;
+}
+
+tagr_tokenizer::tagr_tokenizer(TAGL::driver *drv, std::ostream& out) :
+	_driver{drv},
+	_out{&out},
+	_trie{nullptr}
+{}
 
 // returns true if file exists and optionally sets a filesize pointer
 bool file_exists(const char *fname, size_t *sz=nullptr) {
@@ -44,6 +54,8 @@ struct mmap_t {
 	// construct memory map given filname
 	// throws invalid_argument exception for errors caused by filename argument, otherwise runtime_error
 	mmap_t(const char *f) : data{nullptr}, size{0}, fname{f} {
+		// TODO use `file_exists` defined in `tagd/tagd/include/tagd/io.h`
+
 		if (!file_exists(fname.c_str(), &size))
 			throw std::invalid_argument(std::string("no such file: ").append(fname));
 
@@ -67,12 +79,6 @@ struct mmap_t {
 	}
 };
 
-// value stored at a terminal trie node
-struct trie_value {
-	size_t freq;  // freq now, TODO later: <position of match in input>, <tagd_pos>, <NLP part-of-speech>, etc.
-	trie_value() : freq{0} {}
-};
-
 // forward declare because nodes refer to nodes
 struct node;
 
@@ -86,16 +92,9 @@ struct node {
 	 * the terminal node marks the end of a token
 	 * since this prototype has not yet dealt with tokens that are contained in other tokens as their prefix
 	 *
-	 * TODO: report is this true?
-	 * the trie could have been implemented without this flag by checking a node for empty data array.
-	 * However, this flag gives a significant runtime performance boost.
-	 *
+	 * Also, we could make `val` to be a trei_val pointer set to `nullptr` when terminal node
 	 */
 	bool term;
-
-	// remove term use n == 0 for empty node
-	// TODO (the n in ngram)
-	// size_t n;
 
 	trie_value val;  // data at this node (set when term == true)
 
@@ -113,11 +112,11 @@ struct node {
 	}
 };
 
-// holds a trie structure of ngrams
+// holds a trie structure of values
 struct trie {
 	node root;  // root node of the trie
 
-	trie() = delete;  // no default constructor
+	trie() : root() {}
 
 	// construct trie given filename of bytes
 	// throws invalid_argument exception for errors caused by filename argument, otherwise runtime_error
@@ -137,7 +136,7 @@ struct trie {
 
 	// add a node for each byte in the given token
 	// the end of the token will be represented by an empty node and a terminal flag
-	void add(const std::string& tok) {
+	void add(const std::string& tok, size_t offset = 0) {
 		// current node being added to
 		node *cur = &root;
 		for (char c : tok) {
@@ -150,11 +149,12 @@ struct trie {
 			cur = cur->data[b];
 		}
 		cur->term = true;  // mark end of the token with a term flag
+		cur->val.add_offset(offset);
 	}
 
 	// TODO prints to the trie to the output stream (defalut STDOUT).
 	// the output bytes should match exactly the normalized input stream bytes (TODO: normalize input bytes)
-	void print_trie(TAGL::driver *drv = nullptr) const {
+	void print_trie(std::ostream& out, TAGL::driver *drv = nullptr) const {
 		/* function recursively traverses the trie
 		   note the token prefix of each node is passed by copy (no reference)
 		   this might be expensive, but I didn't see an easy way around it */
@@ -162,17 +162,18 @@ struct trie {
 
 		/* traverse the trie, recursively passing the current token prefix plus the next
 		   char to append until a terminal node is encountered */
-		f_traverse = [&f_traverse, drv](const node* nd, std::string s, char c) {
+		f_traverse = [&f_traverse, &out, drv](const node* nd, std::string s, char c) {
 			if (c) s.push_back(c);
 			if (nd->term) {
-				// TODO printing of token matches shoulud be near where a trie node is added or modified
+				out << s;
+				for (size_t i = 0; i < nd->val.offset_count; ++i)
+					out << (i == 0 ? "\t" : " ") << nd->val.offsets[i];
+
 				if (drv) {
-					// TODO only print if (_opt_print_events)
 					auto tpos_str = TAGL::token_str(drv->lookup_pos(s));
-					std::cout << s << "\t" << tpos_str << std::endl;
-				} else {
-					std::cout << s << std::endl;
+					out << "\t" << tpos_str;
 				}
+				out << '\n';
 				return;
 			}
 			for (int i=0; i<256; i++) {
@@ -223,151 +224,122 @@ struct trie {
 	}
 };
 
-
-// interates over each byte of the mapped data and outputs ngram tokens
-void ngrams(const mmap_t& mapped) {
-	// for each byte in mapped data
-	for (size_t i=0; i<mapped.size; i++) {
-		// TODO WTF is 81 for?
-		for (size_t j=i; (j-i)<81 && j<mapped.size; j++) {
-			std::cout << std::string(&mapped.data[i], (j - i + 1));
-		}
-		std::cout << std::endl;
-	}
+void tagr_tokenizer::print_trie(std::ostream& out) const {
+	if (_trie)
+		_trie->print_trie(out, _driver);
 }
 
-// tagr argument parser - extends cmd_args to handle positional scan file arguments
-class tagr_args : public cmd_args {
-	public:
-		std::vector<std::string> scan_fnames;
-		bool opt_print_events = false;
+tagr_tokenizer::~tagr_tokenizer() = default;
 
-		tagr_args() : cmd_args() {
-			_cmds["--print-events"] = {
-				[this](char *) { opt_print_events = true; },
-				false
-			};
+void tagr_tokenizer::emit(const std::string& tok, size_t offset) {
+	int token = _driver->lookup_pos(tok);
+	const char *name = TAGL::token_str(token);
+
+	_trie->add(tok, offset);
+
+	// Emit the observed token as a token-value and token-type TSV line.
+	(*_out) << tok << '\t' << name << '\n';
+}
+
+void tagr_tokenizer::scan(const unsigned char *data, size_t len) {
+	if (!_trie)
+		_trie = std::make_unique<trie>();
+
+	std::string tok;
+	size_t tok_offset = 0;
+
+	for (size_t i = 0; i < len; ++i) {
+		unsigned char c = data[i];
+
+		// Start or extend the current token until whitespace terminates it.
+		if (!std::isspace(c)) {
+			if (tok.empty())
+				tok_offset = i;
+			tok.push_back((char)c);
+		} else if (!tok.empty()) {
+			emit(tok, tok_offset);
+			tok.clear();
 		}
-
-		void parse(int argc, char **argv) {
-			// pre-filter argv: pull out positional (non-flag) args as scan_fnames,
-			// pass remaining flags and their values to cmd_args::parse()
-			std::vector<char*> filtered;
-			filtered.push_back(argv[0]);
-			for (int i = 1; i < argc; ++i) {
-				auto it = _cmds.find(std::string(argv[i]));
-				if (it != _cmds.end()) {
-					filtered.push_back(argv[i]);
-					if (it->second.has_arg && ++i < argc)
-						filtered.push_back(argv[i]);  // flag value
-				} else if (argv[i][0] == '-') {
-					filtered.push_back(argv[i]);  // unknown flag: let cmd_args error
-				} else {
-					scan_fnames.push_back(argv[i]);  // positional: file to scan
-				}
-			}
-			cmd_args::parse(filtered.size(), filtered.data());
-		}
-};
-
-// tagr - inherits tagsh for tagdb/driver/session setup
-class tagr : public tagsh {
-		tagr_tokenizer _tokenizer;
-		bool _opt_print_events;
-
-	public:
-		tagr(tagdb_type *tdb, bool opt_print_events = false) :
-			tagsh(tdb),
-			_tokenizer(&_driver, std::cerr),
-			_opt_print_events{opt_print_events}
-		{}
-
-		tagd::code scan_fd(int fd) {
-			struct evbuffer *input = evbuffer_new();
-			if (input == nullptr) {
-				std::cerr << "evbuffer_new failed" << std::endl;
-				return tagd::TAGD_ERR;
-			}
-
-			int nread;
-			// read raw bytes from fd into the libevent buffer until EOF
-			while ((nread = evbuffer_read(input, fd, -1)) > 0) {}
-
-			if (nread < 0) {
-				evbuffer_free(input);
-				std::cerr << "evbuffer_read failed: " << std::strerror(errno) << std::endl;
-				return tagd::TAGD_ERR;
-			}
-
-			// Tokenize the buffered bytes and log the emitted token stream.
-			size_t len = evbuffer_get_length(input);
-			const unsigned char *data = evbuffer_pullup(input, len);
-			_tokenizer.scan(data, len);
-
-			auto rc = tagd::TAGD_OK;
-			evbuffer_free(input);
-			return rc;
-		}
-
-		tagd::code scan_fname(const std::string& fname) {
-			int fd = open(fname.c_str(), O_RDONLY);
-			if (fd < 0) {
-				std::cerr << "failed to open file: " << fname << std::endl;
-				return tagd::TAGD_ERR;
-			}
-
-			auto rc = this->scan_fd(fd);
-			close(fd);
-			return rc;
-		}
-
-		tagd::code scan_stdin() {
-			return this->scan_fd(STDIN_FILENO);
-		}
-};
-
-int main(int argc, char **argv) {
-	tagr_args args;
-	args.parse(argc, argv);
-
-	if (args.has_errors()) {
-		args.print_errors();
-		return args.code();
 	}
 
-	tagdb::sqlite tdb;
-	if (tdb.init(args.db_fname) != tagd::TAGD_OK) {
-		tdb.print_errors();
-		return tdb.code();
-	}
+	// Flush the trailing token when input does not end with whitespace.
+	if (!tok.empty())
+		emit(tok, tok_offset);
+}
 
-	tagr t(&tdb, args.opt_print_events);
 
-	bool opt_trace = args.opt_trace;
-	args.opt_trace = false;
-	if (args.interpret(t) != 0)
-		return 1;
-	if (opt_trace)
-		TAGL_SET_TRACE_ON();
+tagr_args::tagr_args() : cmd_args() {
+	_cmds["--print-events"] = {
+		[this](char *) { opt_print_events = true; },
+		false
+	};
+}
 
-	try {
-		tagd::code rc;
-		if (args.scan_fnames.empty()) {
-			rc = t.scan_stdin();
+void tagr_args::parse(int argc, char **argv) {
+	// pre-filter argv: pull out positional (non-flag) args as scan_fnames,
+	// pass remaining flags and their values to cmd_args::parse()
+	std::vector<char*> filtered;
+	filtered.push_back(argv[0]);
+	for (int i = 1; i < argc; ++i) {
+		auto it = _cmds.find(std::string(argv[i]));
+		if (it != _cmds.end()) {
+			filtered.push_back(argv[i]);
+			if (it->second.has_arg && ++i < argc)
+				filtered.push_back(argv[i]);  // flag value
+		} else if (argv[i][0] == '-') {
+			filtered.push_back(argv[i]);  // unknown flag: let cmd_args error
 		} else {
-			rc = tagd::TAGD_OK;
-			for (auto& f : args.scan_fnames) {
-				rc = t.scan_fname(f);
-				if (rc != tagd::TAGD_OK)
-					break;
-			}
+			scan_fnames.push_back(argv[i]);  // positional: file to scan
 		}
-		if (rc != tagd::TAGD_OK)
-			return 1;
-	} catch (const std::exception& e) {
-		std::cerr << e.what() << std::endl;
-		return 1;
+	}
+	cmd_args::parse(filtered.size(), filtered.data());
+}
+
+tagr::tagr(tagdb_type *tdb, bool opt_print_events) :
+	tagsh(tdb),
+	_tokenizer(&_driver, std::cerr),
+	_opt_print_events{opt_print_events}
+{}
+
+tagd::code tagr::scan_fd(int fd) {
+	struct evbuffer *input = evbuffer_new();
+	if (input == nullptr) {
+		std::cerr << "evbuffer_new failed" << std::endl;
+		return tagd::TAGD_ERR;
 	}
 
-	return 0;  // ok
+	int nread;
+	// read raw bytes from fd into the libevent buffer until EOF
+	while ((nread = evbuffer_read(input, fd, -1)) > 0) {}
+
+	if (nread < 0) {
+		evbuffer_free(input);
+		std::cerr << "evbuffer_read failed: " << std::strerror(errno) << std::endl;
+		return tagd::TAGD_ERR;
+	}
+
+	// Tokenize the buffered bytes and log the emitted token stream.
+	size_t len = evbuffer_get_length(input);
+	const unsigned char *data = evbuffer_pullup(input, len);
+	_tokenizer.scan(data, len);
+
+	auto rc = tagd::TAGD_OK;
+	evbuffer_free(input);
+	return rc;
+}
+
+tagd::code tagr::scan_fname(const std::string& fname) {
+	int fd = open(fname.c_str(), O_RDONLY);
+	if (fd < 0) {
+		std::cerr << "failed to open file: " << fname << std::endl;
+		return tagd::TAGD_ERR;
+	}
+
+	auto rc = this->scan_fd(fd);
+	close(fd);
+	return rc;
+}
+
+tagd::code tagr::scan_stdin() {
+	return this->scan_fd(STDIN_FILENO);
 }

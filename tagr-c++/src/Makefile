@@ -15,7 +15,7 @@ LFLAGS = -L$(TAGSH_DIR)/lib -ltagsh -L$(TAGDB_DIR)/lib -ltagdb-sqlite -L$(TAGL_D
 all: tagr
 
 tagr:
-	g++ -O3 -std=c++23 -W -o $(TAGR_BIN) tagr.cc $(INC) $(LFLAGS)
+	g++ -O3 -std=c++23 -W -o $(TAGR_BIN) main.cc tagr.cc $(INC) $(LFLAGS)
 
 clean:
 	rm -f $(TAGR_BIN)

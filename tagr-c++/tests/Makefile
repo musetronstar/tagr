@@ -4,13 +4,14 @@ TAGD_PRG_DIR = ../../../tagd
 TAGD_DIR = $(TAGD_PRG_DIR)/tagd
 TAGL_DIR = $(TAGD_PRG_DIR)/tagl
 TAGDB_DIR = $(TAGD_PRG_DIR)/tagdb
+TAGSH_DIR = $(TAGD_PRG_DIR)/tagsh
 
 .PHONY: all tests debug build tagr_tests expect_tests test_rev_freqs clean
 
 CXXTEST = cxxtestgen --error-printer
 CXXFLAGS ?= -std=c++23 -Wall -Wextra -Wno-unused-result -O3
-INC = -I../src -I$(TAGD_DIR)/include -I$(TAGL_DIR)/include -I$(TAGDB_DIR)/include -I$(TAGDB_DIR)/sqlite/include
-LFLAGS = -L$(TAGDB_DIR)/lib -ltagdb-sqlite -L$(TAGL_DIR)/lib -ltagl -L$(TAGD_DIR)/lib -ltagd -lsqlite3 -levent
+INC = -I../src -I$(TAGD_DIR)/include -I$(TAGL_DIR)/include -I$(TAGDB_DIR)/include -I$(TAGDB_DIR)/sqlite/include -I$(TAGSH_DIR)/include
+LFLAGS = -L$(TAGSH_DIR)/lib -ltagsh -L$(TAGDB_DIR)/lib -ltagdb-sqlite -L$(TAGL_DIR)/lib -ltagl -L$(TAGD_DIR)/lib -ltagd -lsqlite3 -levent -lreadline
 TESTER = ./tester
 EXPECT = expect ./tester.exp
 
@@ -25,7 +26,7 @@ build: tagr_tests
 
 tagr_tests: $(TAGR_BIN)
 	$(CXXTEST) Tester.h -o tester.cpp
-	g++ $(CXXFLAGS) -o tester tester.cpp $(INC) $(LFLAGS)
+	g++ $(CXXFLAGS) -o tester tester.cpp ../src/tagr.cc $(INC) $(LFLAGS)
 	$(TESTER)
 
 expect_tests: $(TAGR_BIN)

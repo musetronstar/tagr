@@ -1,49 +1,58 @@
 #pragma once
 
-#include <cctype>
+#include <cstddef>
+#include <memory>
 #include <ostream>
 #include <string>
+#include <vector>
 
-#include "tagl.h"
+#include "tagsh.h"
+
+static constexpr size_t MAX_TOKEN_POSITIONS = 64;
+
+struct trie_value {
+	// offset_count doubles as the occurrence count for now.
+	size_t offset_count;
+
+	// Byte offsets where this token occurred in the input stream.
+	size_t offsets[MAX_TOKEN_POSITIONS];
+
+	trie_value();
+	void add_offset(size_t offset);
+};
+
+class trie;
 
 class tagr_tokenizer {
 	TAGL::driver *_driver;
 	std::ostream *_out;
+	std::unique_ptr<trie> _trie;
 
-	// TODO `.h` headers for definitionp; `.cc` for implementation
-	void emit(const std::string& tok, size_t) {
-		int token = _driver->lookup_pos(tok);
-		const char *name = TAGL::token_str(token);
-
-		// Emit the observed token as a token-value and token-type TSV line.
-		(*_out) << tok << '\t' << name << '\n';
-	}
+	void emit(const std::string& tok, size_t offset);
 
 	public:
-		tagr_tokenizer(TAGL::driver *drv, std::ostream& out)
-			: _driver{drv}, _out{&out} {}
+		tagr_tokenizer(TAGL::driver *drv, std::ostream& out);
+		~tagr_tokenizer();
+		void scan(const unsigned char *data, size_t len);
+		void print_trie(std::ostream& out) const;
+};
 
-		// TODO `.h` headers for definitionp; `.cc` for implementation
-		void scan(const unsigned char *data, size_t len) {
-			std::string tok;
-			size_t tok_offset = 0;
+class tagr_args : public cmd_args {
+	public:
+		std::vector<std::string> scan_fnames;
+		bool opt_print_events = false;
 
-			for (size_t i = 0; i < len; ++i) {
-				unsigned char c = data[i];
+		tagr_args();
+		void parse(int argc, char **argv);
+};
 
-				// Start or extend the current token until whitespace terminates it.
-				if (!std::isspace(c)) {
-					if (tok.empty())
-						tok_offset = i;
-					tok.push_back((char)c);
-				} else if (!tok.empty()) {
-					emit(tok, tok_offset);
-					tok.clear();
-				}
-			}
+class tagr : public tagsh {
+		tagr_tokenizer _tokenizer;
+		bool _opt_print_events;
 
-			// Flush the trailing token when input does not end with whitespace.
-			if (!tok.empty())
-				emit(tok, tok_offset);
-		}
+	public:
+		tagr(tagdb_type *tdb, bool opt_print_events = false);
+		tagd::code scan_fd(int fd);
+		tagd::code scan_fname(const std::string& fname);
+		tagd::code scan_stdin();
 };
