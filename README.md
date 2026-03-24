@@ -113,3 +113,12 @@ Constrains "age" to the tagd POS `<subject>`.
 ```bash
 echo "age how old a person or thing is" | tagr --hint subject=age
 ```
+
+## Maxim
+
+All that tagr does is,
+Bytes in -> TAGL out:
++ STDIN - bytes
++ STOUT - correct TAGL, comments
+- STDERR - TAGL errors, logged events (default, but syslog style facilities later)
+
