@@ -1,4 +1,14 @@
-      3 of	TOK_SUB_RELATOR
+      2 is	TOK_UNKNOWN
+      2 dog	TOK_UNKNOWN
+      2 cat	TOK_UNKNOWN
+      2 a	TOK_UNKNOWN
       2 any	TOK_TAG
-      1 r@nd0m	TOK_UNKNOWN
+      2 an	TOK_UNKNOWN
+      2 animal.	TOK_UNKNOWN
+      1 pets.	TOK_UNKNOWN
+      1 or	TOK_UNKNOWN
       1 one	TOK_TAG
+      1 of	TOK_SUB_RELATOR
+      1 many	TOK_UNKNOWN
+      1 can	TOK_UNKNOWN
+      1 be	TOK_UNKNOWN
